@@ -9,13 +9,3 @@ font = "sans serif"
 headless = true
 enableCORS = false
 enableXsrfProtection = true
-```
-
-6. Click **"Commit changes"**
-
----
-
-After this, your structure should be:
-```
-.streamlit/
-    config.toml    ← Just one level, not nested
