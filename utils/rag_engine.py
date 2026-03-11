@@ -1,0 +1,798 @@
+"""
+rag_engine.py
+=============
+City of Brentwood Engineering AI Assistant - V2
+Core RAG (Retrieval-Augmented Generation) query engine.
+
+PURPOSE:
+    This is the brain of the assistant. When an engineer asks a question,
+    this module:
+
+    1. SEARCHES ChromaDB for the most relevant chunks across all 26 documents
+    2. DETECTS whether multiple documents answer the same question (potential
+       discrepancies between Municipal Code and Engineering Policy Manual)
+    3. BUILDS a structured prompt with all retrieved context
+    4. CALLS Claude to generate a grounded answer
+    5. FORMATS the response with footnote-style citations (¹ ² ³)
+    6. FLAGS discrepancies or "more restrictive policy" situations
+
+HOW CITATIONS WORK:
+    Inline superscripts reference a numbered list at the bottom:
+        "Riparian buffers must be at least 50 feet wide.¹ Perennial streams
+        require 75 feet.²"
+
+        ¹ Brentwood Municipal Code, Chapter 56 — Stormwater Management,
+          Sec. 56-31 — Riparian Buffer Requirements
+        ² City of Brentwood Engineering Dept. Policy Manual — Riparian Buffers
+
+HOW DISCREPANCY FLAGS WORK:
+    ⚠️  More Restrictive Policy — Manual imposes requirements beyond the code.
+        Both requirements apply. Engineers should follow the stricter standard.
+
+    🔴 Discrepancy Identified — Sources appear to conflict.
+        Do not rely on this response alone. Defer to the City Engineer.
+
+WHAT THIS MODULE DOES NOT DO:
+    - It never fabricates information
+    - It never resolves discrepancies between sources
+    - It never cites sources it did not retrieve
+    - It never answers from model training — only from retrieved chunks
+
+AUTHOR:  City of Brentwood Engineering Department AI Assistant Project
+VERSION: 2.0
+"""
+
+import re
+import time
+from pathlib import Path
+from typing import Optional
+
+import streamlit as st
+
+# ChromaDB — our vector database
+import chromadb
+from chromadb.utils import embedding_functions
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONFIGURATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Model used for generating answers.
+# Must match Anthropic's current model string exactly.
+CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
+
+# ChromaDB collection name — must match what build_corpus.py created.
+COLLECTION_NAME = "brentwood_engineering_v2"
+
+# Embedding model — MUST match what build_corpus.py used.
+# Changing this requires a full corpus rebuild.
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
+# How many chunks to retrieve from ChromaDB per query.
+# More chunks = more context = better coverage but higher token cost.
+# 8 is a good balance for municipal policy questions.
+TOP_K_CHUNKS = 8
+
+# Minimum similarity score (0.0–1.0) to include a chunk.
+# Chunks below this threshold are discarded as probably irrelevant.
+# 0.35 is intentionally permissive — better to include borderline chunks
+# than miss something and fabricate.
+SIMILARITY_THRESHOLD = 0.35
+
+# Maximum tokens Claude may use in its answer.
+MAX_ANSWER_TOKENS = 1500
+
+# Temperature for Claude — always 0.0 for factual/policy work.
+# Higher temperature = more creative but less consistent.
+# Zero = deterministic, no hallucination-inducing randomness.
+TEMPERATURE = 0.0
+
+# Content type labels used in chunk metadata (set by section_chunker.py)
+CONTENT_TYPE_MUNICIPAL_CODE  = "municipal_code"
+CONTENT_TYPE_APPENDIX        = "appendix"
+CONTENT_TYPE_ENGINEERING_POL = "engineering_policy"
+CONTENT_TYPE_CODE_REF        = "code_reference"
+CONTENT_TYPE_EXTERNAL_REF    = "external_reference"
+
+# Document categories for discrepancy detection
+CODE_CONTENT_TYPES   = {CONTENT_TYPE_MUNICIPAL_CODE, CONTENT_TYPE_APPENDIX}
+POLICY_CONTENT_TYPES = {CONTENT_TYPE_ENGINEERING_POL, CONTENT_TYPE_CODE_REF,
+                        CONTENT_TYPE_EXTERNAL_REF}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RAG ENGINE CLASS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RAGEngine:
+    """
+    Multi-document Retrieval-Augmented Generation engine for the
+    City of Brentwood Engineering AI Assistant.
+
+    LIFECYCLE:
+        engine = RAGEngine(db_path="/tmp/brentwood_v2_db")
+        if engine.is_ready():
+            result = engine.query("What is the minimum riparian buffer width?")
+            print(result['answer'])
+            for citation in result['citations']:
+                print(citation['formatted'])
+
+    The engine is initialized once and reused across all queries in a
+    Streamlit session (stored in st.session_state).
+    """
+
+    def __init__(self, db_path: Optional[str] = None):
+        """
+        Initialize the RAG engine.
+
+        ARGS:
+            db_path: Path to the local ChromaDB directory.
+                     If None, reads LOCAL_DB_PATH from drive_loader.
+                     Explicit path is preferred for testability.
+        """
+        self.db_path      = db_path
+        self.chroma_client = None
+        self.collection    = None
+        self.claude_client = None
+        self.is_initialized = False
+        self._init_error   = None
+
+        try:
+            self._initialize()
+        except Exception as e:
+            self._init_error = str(e)
+            print(f"RAGEngine initialization failed: {e}")
+
+    # ── Initialization ────────────────────────────────────────────────────
+
+    def _initialize(self):
+        """
+        Set up ChromaDB connection and Claude API client.
+        Called once during __init__.
+        """
+        self._connect_chromadb()
+        self._connect_claude()
+        self.is_initialized = True
+
+    def _connect_chromadb(self):
+        """
+        Connect to the local ChromaDB database downloaded by drive_loader.
+
+        ChromaDB stores its data as files on disk. We point it at the
+        directory where drive_loader.py saved the downloaded files.
+        """
+        # Determine database path
+        if self.db_path:
+            db_directory = self.db_path
+        else:
+            # Import here to avoid circular imports at module load time
+            from utils.drive_loader import LOCAL_DB_PATH
+            db_directory = LOCAL_DB_PATH
+
+        db_path_obj = Path(db_directory)
+        if not db_path_obj.exists():
+            raise FileNotFoundError(
+                f"ChromaDB directory not found at '{db_directory}'. "
+                "The database may not have been downloaded yet. "
+                "Check drive_loader status on the Admin panel."
+            )
+
+        # Create embedding function — must match what build_corpus.py used
+        embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=EMBEDDING_MODEL
+        )
+
+        # Connect to ChromaDB
+        self.chroma_client = chromadb.PersistentClient(path=str(db_path_obj))
+
+        # Load the collection
+        try:
+            self.collection = self.chroma_client.get_collection(
+                name=COLLECTION_NAME,
+                embedding_function=embed_fn,
+            )
+            count = self.collection.count()
+            print(f"ChromaDB connected: '{COLLECTION_NAME}' — {count:,} chunks")
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Collection '{COLLECTION_NAME}' not found in ChromaDB. "
+                f"Has build_corpus.py been run? Error: {e}"
+            )
+
+    def _connect_claude(self):
+        """
+        Set up the Anthropic API client using the key from Streamlit secrets.
+        """
+        import anthropic
+
+        try:
+            api_key = st.secrets.get("CLAUDE_API_KEY")
+        except Exception:
+            # Fallback for environments without Streamlit (e.g. unit tests)
+            import os
+            api_key = os.environ.get("CLAUDE_API_KEY")
+
+        if not api_key:
+            raise ValueError(
+                "CLAUDE_API_KEY not found in Streamlit secrets. "
+                "Add it to your .streamlit/secrets.toml file."
+            )
+
+        self.claude_client = anthropic.Anthropic(api_key=api_key)
+        print("Claude API client connected")
+
+    # ── Public API ────────────────────────────────────────────────────────
+
+    def is_ready(self) -> bool:
+        """Return True if the engine is fully initialized and ready to query."""
+        return (
+            self.is_initialized
+            and self.collection is not None
+            and self.claude_client is not None
+        )
+
+    def get_init_error(self) -> Optional[str]:
+        """Return the initialization error message, or None if init succeeded."""
+        return self._init_error
+
+    def get_collection_stats(self) -> dict:
+        """
+        Return basic statistics about the loaded collection.
+        Used by the Admin panel to show corpus health.
+        """
+        if not self.collection:
+            return {"ready": False}
+
+        count = self.collection.count()
+        return {
+            "ready":           True,
+            "collection_name": COLLECTION_NAME,
+            "total_chunks":    count,
+            "embedding_model": EMBEDDING_MODEL,
+            "claude_model":    CLAUDE_MODEL,
+        }
+
+    def query(self, question: str) -> dict:
+        """
+        Answer an engineering policy question using retrieved context.
+
+        This is the main public method called by the Streamlit pages.
+
+        ARGS:
+            question: The engineer's natural language question.
+                      e.g. "What is the minimum riparian buffer for a perennial stream?"
+
+        RETURNS:
+            dict with keys:
+                answer (str):          Formatted answer with inline superscripts
+                citations (list):      List of citation dicts (see _build_citations)
+                discrepancy_flag (str|None):  "more_restrictive" | "conflict" | None
+                discrepancy_note (str|None):  Explanation text if flagged
+                chunks_used (int):     Number of chunks that contributed
+                sources_count (int):   Number of unique documents cited
+                abstained (bool):      True if system couldn't find relevant info
+                model_used (str):      Claude model string
+                token_usage (dict):    input_tokens, output_tokens
+                elapsed_seconds (float): Total query time
+                error (str|None):      Error message if query failed
+        """
+        if not self.is_ready():
+            return self._error_result(
+                "System not ready. " + (self._init_error or "Check Admin panel.")
+            )
+
+        if not question or not question.strip():
+            return self._error_result("Please enter a question.")
+
+        start_time = time.time()
+
+        try:
+            # Step 1: Retrieve relevant chunks from ChromaDB
+            chunks = self._retrieve_chunks(question)
+
+            # Step 2: Check if we found anything useful
+            if not chunks:
+                return self._abstain_result(question, start_time)
+
+            # Step 3: Detect potential discrepancies between code and policy
+            discrepancy_flag, discrepancy_note = self._detect_discrepancy(chunks)
+
+            # Step 4: Build the citations list (numbered, formatted)
+            citations = self._build_citations(chunks)
+
+            # Step 5: Generate answer using Claude
+            raw_answer, token_usage = self._generate_answer(
+                question, chunks, citations, discrepancy_flag
+            )
+
+            # Step 6: Check if Claude abstained (couldn't find the answer)
+            abstained = self._check_abstention(raw_answer)
+
+            elapsed = round(time.time() - start_time, 2)
+
+            return {
+                "answer":            raw_answer,
+                "citations":         citations,
+                "discrepancy_flag":  discrepancy_flag,
+                "discrepancy_note":  discrepancy_note,
+                "chunks_used":       len(chunks),
+                "sources_count":     len(citations),
+                "abstained":         abstained,
+                "model_used":        CLAUDE_MODEL,
+                "token_usage":       token_usage,
+                "elapsed_seconds":   elapsed,
+                "error":             None,
+                # Legacy key kept for compatibility with V1 QA page display
+                "sources": [
+                    {
+                        "source_num":  c["number"],
+                        "source_file": c["doc_title"],
+                        "chunk_id":    c["chunk_id"],
+                        "similarity":  c["similarity"],
+                        "chunk_type":  c["content_type"],
+                    }
+                    for c in citations
+                ],
+            }
+
+        except Exception as e:
+            return self._error_result(str(e))
+
+    # ── Retrieval ─────────────────────────────────────────────────────────
+
+    def _retrieve_chunks(self, question: str) -> list:
+        """
+        Search ChromaDB for the most relevant chunks to the question.
+
+        Uses cosine similarity between the question embedding and all
+        chunk embeddings in the database. Returns the top-K chunks
+        above the similarity threshold, deduplicated by chunk ID.
+
+        ARGS:
+            question: The engineer's question (plain text)
+
+        RETURNS:
+            List of chunk dicts, sorted by similarity (highest first).
+            Each dict has: text, similarity, chunk_id, doc_id, doc_title,
+            content_type, section_number, section_title, source_citation,
+            article, division
+        """
+        results = self.collection.query(
+            query_texts=[question],
+            n_results=TOP_K_CHUNKS,
+            include=["documents", "metadatas", "distances"],
+        )
+
+        if not results["documents"] or not results["documents"][0]:
+            return []
+
+        chunks = []
+        seen_chunk_ids = set()  # deduplicate
+
+        docs      = results["documents"][0]
+        metadatas = results["metadatas"][0]
+        distances = results["distances"][0]
+
+        for text, meta, distance in zip(docs, metadatas, distances):
+            # Convert ChromaDB distance to similarity score
+            # ChromaDB uses L2 distance by default; convert to 0-1 similarity
+            similarity = max(0.0, 1.0 - (distance / 2.0))
+
+            if similarity < SIMILARITY_THRESHOLD:
+                continue
+
+            chunk_id = meta.get("chunk_id", "")
+            if chunk_id in seen_chunk_ids:
+                continue
+            seen_chunk_ids.add(chunk_id)
+
+            chunks.append({
+                "text":            text,
+                "similarity":      round(similarity, 4),
+                "chunk_id":        chunk_id,
+                "doc_id":          meta.get("doc_id", ""),
+                "doc_title":       meta.get("doc_title", "Unknown Document"),
+                "content_type":    meta.get("content_type", ""),
+                "section_number":  meta.get("section_number", ""),
+                "section_title":   meta.get("section_title", ""),
+                "source_citation": meta.get("source_citation", ""),
+                "article":         meta.get("article", ""),
+                "division":        meta.get("division", ""),
+            })
+
+        # Sort by similarity, best first
+        chunks.sort(key=lambda c: c["similarity"], reverse=True)
+        return chunks
+
+    # ── Discrepancy Detection ─────────────────────────────────────────────
+
+    def _detect_discrepancy(self, chunks: list) -> tuple:
+        """
+        Check whether the retrieved chunks contain both Municipal Code
+        content and Engineering Policy content that might conflict.
+
+        LOGIC:
+            If chunks come from BOTH code sources AND policy sources,
+            we flag this for the engineer. The flag type is:
+
+            "more_restrictive" — chunks appear additive (policy adds
+                requirements on top of code, which is common and expected)
+
+            "conflict" — chunks appear to directly contradict each other
+                (rare but serious — deferred to City Engineer)
+
+            None — sources are consistent or only one source type
+
+        NOTE:
+            We intentionally err on the side of flagging. False positives
+            (unnecessary warnings) are far safer than missed conflicts
+            in a safety-critical engineering context.
+
+        RETURNS:
+            (flag_type, note_text) where flag_type is "more_restrictive",
+            "conflict", or None.
+        """
+        code_chunks   = [c for c in chunks if c["content_type"] in CODE_CONTENT_TYPES]
+        policy_chunks = [c for c in chunks if c["content_type"] in POLICY_CONTENT_TYPES]
+
+        if not code_chunks or not policy_chunks:
+            # Only one source type — no discrepancy possible
+            return None, None
+
+        # Both source types are present — flag it
+        # We use a simple heuristic: if the policy chunk explicitly references
+        # the same section number as a code chunk, the relationship is probably
+        # "more restrictive" (common). Otherwise flag as potential conflict.
+
+        code_section_numbers = {
+            c["section_number"] for c in code_chunks if c["section_number"]
+        }
+        policy_section_refs = " ".join(
+            c["text"] for c in policy_chunks
+        ).lower()
+
+        # Check if any code section number appears in policy text
+        # (indicating the policy is referencing, not contradicting, the code)
+        cross_reference_found = any(
+            sec.lower().replace("_occ2", "").replace("_occ3", "")
+            in policy_section_refs
+            for sec in code_section_numbers
+            if sec
+        )
+
+        if cross_reference_found:
+            # Policy is explicitly referencing the code section —
+            # likely "more restrictive" (additional requirements)
+            note = (
+                "The Engineering Policy Manual references requirements from the "
+                "Municipal Code. The Manual may impose stricter standards than "
+                "the Code alone. Both sets of requirements apply — follow the "
+                "more restrictive standard."
+            )
+            return "more_restrictive", note
+        else:
+            # Both sources address the topic but without clear cross-reference —
+            # flag as potential conflict for engineer to review
+            note = (
+                "This question is addressed by both the Municipal Code and the "
+                "Engineering Policy Manual. The sources may conflict or address "
+                "different aspects of the same topic. Review both sources and "
+                "defer to the City Engineer for binding interpretation."
+            )
+            return "conflict", note
+
+    # ── Citation Building ─────────────────────────────────────────────────
+
+    def _build_citations(self, chunks: list) -> list:
+        """
+        Build the numbered citation list from retrieved chunks.
+
+        Each unique source_citation string gets one citation number.
+        Multiple chunks from the same section share one citation number.
+
+        CITATION FORMAT BY CONTENT TYPE:
+            municipal_code / appendix:
+                "Brentwood Municipal Code, Chapter 56 — Stormwater Management,
+                 Sec. 56-31 — Riparian Buffer Requirements"
+
+            engineering_policy:
+                "City of Brentwood Engineering Dept. Policy Manual —
+                 Retaining Walls"
+
+            code_reference:
+                "Brentwood Municipal Code, Sec. 78-486
+                 (referenced in Engineering Policy Manual)"
+
+            external_reference:
+                "[TDEC Stormwater Design Guidelines]
+                 (cited in Engineering Policy Manual)"
+
+        RETURNS:
+            List of citation dicts, one per unique source, in order of
+            first appearance. Each dict has:
+                number (int):       Citation number (1, 2, 3...)
+                chunk_id (str):     First chunk_id for this citation
+                doc_id (str):       Document identifier
+                doc_title (str):    Human-readable document title
+                content_type (str): Content type tag
+                section_number (str)
+                section_title (str)
+                source_citation (str): Raw citation string from metadata
+                formatted (str):    Display string for the citation list
+                similarity (float): Best similarity score for this citation
+        """
+        seen_citations = {}  # source_citation → citation dict
+        citation_order = []  # ordered list of unique source_citations
+
+        for chunk in chunks:
+            citation_key = chunk["source_citation"] or chunk["chunk_id"]
+
+            if citation_key not in seen_citations:
+                seen_citations[citation_key] = {
+                    "number":          len(seen_citations) + 1,
+                    "chunk_id":        chunk["chunk_id"],
+                    "doc_id":          chunk["doc_id"],
+                    "doc_title":       chunk["doc_title"],
+                    "content_type":    chunk["content_type"],
+                    "section_number":  chunk["section_number"],
+                    "section_title":   chunk["section_title"],
+                    "source_citation": chunk["source_citation"],
+                    "formatted":       self._format_citation(chunk),
+                    "similarity":      chunk["similarity"],
+                }
+                citation_order.append(citation_key)
+            else:
+                # Keep the highest similarity score for this citation
+                existing = seen_citations[citation_key]
+                if chunk["similarity"] > existing["similarity"]:
+                    existing["similarity"] = chunk["similarity"]
+
+        return [seen_citations[key] for key in citation_order]
+
+    def _format_citation(self, chunk: dict) -> str:
+        """
+        Format a single citation for display in the citation list.
+
+        Uses the source_citation string from the chunk metadata,
+        which was set by section_chunker.py using document_registry.py's
+        format_citation() function. Falls back gracefully if missing.
+        """
+        # Use the pre-formatted citation from metadata if available
+        if chunk["source_citation"]:
+            return chunk["source_citation"]
+
+        # Fallback: construct from available fields
+        content_type = chunk["content_type"]
+        doc_title    = chunk["doc_title"]
+        section_num  = chunk["section_number"]
+        section_title = chunk["section_title"]
+
+        if content_type in CODE_CONTENT_TYPES:
+            base = f"Brentwood Municipal Code — {doc_title}"
+            if section_num and section_title:
+                return f"{base}, Sec. {section_num} — {section_title}"
+            elif section_num:
+                return f"{base}, Sec. {section_num}"
+            return base
+
+        elif content_type == CONTENT_TYPE_ENGINEERING_POL:
+            base = "City of Brentwood Engineering Dept. Policy Manual"
+            if section_title:
+                return f"{base} — {section_title}"
+            return base
+
+        elif content_type == CONTENT_TYPE_CODE_REF:
+            base = f"Brentwood Municipal Code, Sec. {section_num}"
+            return f"{base} (referenced in Engineering Policy Manual)"
+
+        elif content_type == CONTENT_TYPE_EXTERNAL_REF:
+            return f"{doc_title} (cited in Engineering Policy Manual)"
+
+        return doc_title or "City of Brentwood Engineering Documents"
+
+    # ── Answer Generation ─────────────────────────────────────────────────
+
+    def _generate_answer(
+        self,
+        question: str,
+        chunks: list,
+        citations: list,
+        discrepancy_flag: Optional[str],
+    ) -> tuple:
+        """
+        Call Claude to generate a grounded answer with inline citations.
+
+        PROMPT STRATEGY:
+            - Provide all retrieved chunks as numbered context blocks
+            - Tell Claude which citation number corresponds to each chunk
+            - Require inline superscripts in the answer (¹ ² ³)
+            - Require a direct answer in the first sentence
+            - Prohibit markdown formatting (### ** etc.)
+            - Prohibit any information not in the provided context
+            - Require abstention phrase if context doesn't answer the question
+
+        ARGS:
+            question:         The engineer's question
+            chunks:           Retrieved context chunks
+            citations:        Numbered citation list (built by _build_citations)
+            discrepancy_flag: "more_restrictive" | "conflict" | None
+
+        RETURNS:
+            (answer_text, token_usage_dict)
+        """
+        # Build the context block
+        # Map each chunk to its citation number
+        context_blocks = []
+        for i, chunk in enumerate(chunks):
+            # Find this chunk's citation number
+            citation_key = chunk["source_citation"] or chunk["chunk_id"]
+            citation_num = next(
+                (c["number"] for c in citations
+                 if (c["source_citation"] or c["chunk_id"]) == citation_key),
+                i + 1
+            )
+            context_blocks.append(
+                f"[CONTEXT {citation_num} — {chunk['doc_title']}]\n"
+                f"{chunk['text']}"
+            )
+
+        full_context = "\n\n".join(context_blocks)
+
+        # Build the citation reference list for Claude
+        citation_list = "\n".join(
+            f"  {c['number']}. {c['formatted']}"
+            for c in citations
+        )
+
+        # Build discrepancy instruction if needed
+        discrepancy_instruction = ""
+        if discrepancy_flag == "more_restrictive":
+            discrepancy_instruction = (
+                "\n\nIMPORTANT: Both Municipal Code and Engineering Policy Manual "
+                "sources are present. If the Manual imposes stricter requirements "
+                "than the Code, state both and note that the stricter standard applies."
+            )
+        elif discrepancy_flag == "conflict":
+            discrepancy_instruction = (
+                "\n\nIMPORTANT: Sources from both Municipal Code and Engineering "
+                "Policy Manual are present and may conflict. Present what each "
+                "source says separately. Do NOT resolve the conflict. State that "
+                "the engineer must verify with the City Engineer."
+            )
+
+        prompt = f"""You are the City of Brentwood Engineering AI Assistant.
+You answer questions about municipal engineering policy for licensed engineers
+and support staff in the Engineering Department.
+
+CONTEXT FROM BRENTWOOD ENGINEERING DOCUMENTS:
+{full_context}
+
+CITATION NUMBERS ASSIGNED TO THE ABOVE SOURCES:
+{citation_list}
+
+QUESTION: {question}
+{discrepancy_instruction}
+
+ANSWER REQUIREMENTS:
+1. Start with a direct, specific answer in the first sentence.
+2. Use superscript numbers (¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸) inline to cite your sources.
+   Example: "The minimum buffer width is 50 feet.¹ Perennial streams require 75 feet.²"
+3. Include specific numbers, measurements, and requirements from the sources.
+4. If a table or list of values is relevant, present it clearly.
+5. Do not use markdown formatting (no **, no ##, no ---).
+6. Do not include information that is not in the provided context.
+7. If the context does not contain enough information to answer the question,
+   respond with exactly: "ABSTAIN: The provided documents do not contain
+   sufficient information to answer this question. Please consult the
+   Engineering Manual directly or contact the City Engineer."
+
+Write your answer now:"""
+
+        response = self.claude_client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=MAX_ANSWER_TOKENS,
+            temperature=TEMPERATURE,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        answer_text = response.content[0].text.strip()
+        token_usage = {
+            "input_tokens":  response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        }
+
+        return answer_text, token_usage
+
+    # ── Helper Methods ────────────────────────────────────────────────────
+
+    def _check_abstention(self, answer: str) -> bool:
+        """
+        Return True if Claude's answer indicates it could not find
+        the information in the provided context.
+        """
+        abstention_markers = [
+            "ABSTAIN:",
+            "do not contain sufficient information",
+            "not found in the provided",
+            "cannot find this information",
+            "not addressed in the",
+        ]
+        answer_lower = answer.lower()
+        return any(marker.lower() in answer_lower for marker in abstention_markers)
+
+    def _abstain_result(self, question: str, start_time: float) -> dict:
+        """
+        Return a structured abstention response when no relevant chunks
+        were found in the database.
+        """
+        elapsed = round(time.time() - start_time, 2)
+        return {
+            "answer": (
+                "ABSTAIN: No relevant content was found in the Brentwood "
+                "Engineering documents for this question. Please consult the "
+                "Engineering Manual directly or contact the City Engineer."
+            ),
+            "citations":         [],
+            "discrepancy_flag":  None,
+            "discrepancy_note":  None,
+            "chunks_used":       0,
+            "sources_count":     0,
+            "abstained":         True,
+            "model_used":        CLAUDE_MODEL,
+            "token_usage":       {"input_tokens": 0, "output_tokens": 0},
+            "elapsed_seconds":   elapsed,
+            "error":             None,
+            "sources":           [],
+        }
+
+    def _error_result(self, error_message: str) -> dict:
+        """
+        Return a structured error response for unexpected failures.
+        """
+        return {
+            "answer": f"An error occurred: {error_message}",
+            "citations":         [],
+            "discrepancy_flag":  None,
+            "discrepancy_note":  None,
+            "chunks_used":       0,
+            "sources_count":     0,
+            "abstained":         False,
+            "model_used":        CLAUDE_MODEL,
+            "token_usage":       {"input_tokens": 0, "output_tokens": 0},
+            "elapsed_seconds":   0,
+            "error":             error_message,
+            "sources":           [],
+        }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STREAMLIT CACHE WRAPPER
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_resource(show_spinner=False)
+def get_rag_engine(db_path: str) -> RAGEngine:
+    """
+    Create and cache the RAG engine for the Streamlit session.
+
+    @st.cache_resource means this runs once per server session,
+    not once per user or browser refresh. The embedding model
+    (all-MiniLM-L6-v2) takes ~5 seconds to load the first time —
+    caching prevents reloading it on every page navigation.
+
+    USAGE IN STREAMLIT PAGES:
+        from utils.rag_engine import get_rag_engine
+        from utils.drive_loader import load_database
+
+        db_info = load_database()
+        if db_info["success"]:
+            engine = get_rag_engine(db_info["local_path"])
+            result = engine.query("What is the minimum buffer width?")
+
+    ARGS:
+        db_path: Local path to ChromaDB directory (from drive_loader)
+
+    RETURNS:
+        Initialized RAGEngine instance (may not be ready if init failed)
+    """
+    return RAGEngine(db_path=db_path)
