@@ -9,6 +9,10 @@ import sys
 from pathlib import Path
 import streamlit as st
 
+# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
+import torch
+torch.classes.__path__ = []
+
 # pages/ is one level down — add both utils/ and repo root
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
 sys.path.append(str(Path(__file__).parent.parent))
