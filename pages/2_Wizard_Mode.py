@@ -15,7 +15,9 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO, StringIO
 
+# pages/ is one level down — add both utils/ and repo root
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
+sys.path.append(str(Path(__file__).parent.parent))
 
 from checklist_data import (
     REVIEW_TYPES,
