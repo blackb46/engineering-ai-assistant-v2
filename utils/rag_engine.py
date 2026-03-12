@@ -343,65 +343,93 @@ class RAGEngine:
 
     def _retrieve_chunks(self, question: str) -> list:
         """
-        Search ChromaDB for the most relevant chunks to the question.
+        Hybrid retrieval: two-pass search to ensure Engineering Policy Manual
+        content is always included alongside Municipal Code results.
 
-        Uses cosine similarity between the question embedding and all
-        chunk embeddings in the database. Returns the top-K chunks
-        above the similarity threshold, deduplicated by chunk ID.
+        PASS 1 — Global search: Top 12 chunks from all 26 documents.
+        PASS 2 — EPM search: Top 4 chunks filtered to Engineering Policy Manual
+                 documents only (doc_id: epm, appendix_a).
+
+        WHY TWO PASSES:
+            The Engineering Policy Manual often contains the most detailed
+            operational guidance (e.g. paved vs. unpaved grades, as-built
+            survey requirements) but scores lower than Municipal Code chunks
+            because the Code uses more direct regulatory language that matches
+            question phrasing better. Without a targeted EPM pass, these
+            critical policy details get crowded out.
+
+        Results are merged and deduplicated. EPM chunks from Pass 2 are
+        included even if their similarity score is below the global top-K
+        cutoff, provided they meet the minimum similarity threshold.
 
         ARGS:
             question: The engineer's question (plain text)
 
         RETURNS:
             List of chunk dicts, sorted by similarity (highest first).
-            Each dict has: text, similarity, chunk_id, doc_id, doc_title,
-            content_type, section_number, section_title, source_citation,
-            article, division
         """
-        results = self.collection.query(
+        seen_chunk_ids = set()
+        chunks = []
+
+        def _parse_results(results, min_similarity=SIMILARITY_THRESHOLD):
+            """Parse a ChromaDB result set into chunk dicts."""
+            parsed = []
+            if not results["documents"] or not results["documents"][0]:
+                return parsed
+            for text, meta, distance in zip(
+                results["documents"][0],
+                results["metadatas"][0],
+                results["distances"][0],
+            ):
+                similarity = max(0.0, 1.0 - (distance / 2.0))
+                if similarity < min_similarity:
+                    continue
+                chunk_id = meta.get("chunk_id", "")
+                if chunk_id in seen_chunk_ids:
+                    continue
+                seen_chunk_ids.add(chunk_id)
+                parsed.append({
+                    "text":            text,
+                    "similarity":      round(similarity, 4),
+                    "chunk_id":        chunk_id,
+                    "doc_id":          meta.get("doc_id", ""),
+                    "doc_title":       meta.get("doc_title", "Unknown Document"),
+                    "content_type":    meta.get("content_type", ""),
+                    "section_number":  meta.get("section_number", ""),
+                    "section_title":   meta.get("section_title", ""),
+                    "source_citation": meta.get("source_citation", ""),
+                    "article":         meta.get("article", ""),
+                    "division":        meta.get("division", ""),
+                })
+            return parsed
+
+        # ── Pass 1: Global search across all documents ─────────────────────
+        global_results = self.collection.query(
             query_texts=[question],
             n_results=TOP_K_CHUNKS,
             include=["documents", "metadatas", "distances"],
         )
+        chunks.extend(_parse_results(global_results))
 
-        if not results["documents"] or not results["documents"][0]:
-            return []
+        # ── Pass 2: Targeted EPM search ────────────────────────────────────
+        # Always pull the top 4 Engineering Policy Manual chunks for this
+        # question, regardless of how they ranked in the global search.
+        # This guarantees detailed policy guidance is never crowded out
+        # by higher-scoring Municipal Code chunks.
+        EPM_DOC_IDS = ["epm"]
+        try:
+            epm_results = self.collection.query(
+                query_texts=[question],
+                n_results=4,
+                where={"doc_id": {"$in": EPM_DOC_IDS}},
+                include=["documents", "metadatas", "distances"],
+            )
+            chunks.extend(_parse_results(epm_results, min_similarity=0.30))
+        except Exception:
+            # If filtered query fails, continue with global results only
+            pass
 
-        chunks = []
-        seen_chunk_ids = set()  # deduplicate
-
-        docs      = results["documents"][0]
-        metadatas = results["metadatas"][0]
-        distances = results["distances"][0]
-
-        for text, meta, distance in zip(docs, metadatas, distances):
-            # Convert ChromaDB distance to similarity score
-            # ChromaDB uses L2 distance by default; convert to 0-1 similarity
-            similarity = max(0.0, 1.0 - (distance / 2.0))
-
-            if similarity < SIMILARITY_THRESHOLD:
-                continue
-
-            chunk_id = meta.get("chunk_id", "")
-            if chunk_id in seen_chunk_ids:
-                continue
-            seen_chunk_ids.add(chunk_id)
-
-            chunks.append({
-                "text":            text,
-                "similarity":      round(similarity, 4),
-                "chunk_id":        chunk_id,
-                "doc_id":          meta.get("doc_id", ""),
-                "doc_title":       meta.get("doc_title", "Unknown Document"),
-                "content_type":    meta.get("content_type", ""),
-                "section_number":  meta.get("section_number", ""),
-                "section_title":   meta.get("section_title", ""),
-                "source_citation": meta.get("source_citation", ""),
-                "article":         meta.get("article", ""),
-                "division":        meta.get("division", ""),
-            })
-
-        # Sort by similarity, best first
+        # Sort all chunks by similarity, best first
         chunks.sort(key=lambda c: c["similarity"], reverse=True)
         return chunks
 
