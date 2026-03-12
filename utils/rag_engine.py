@@ -514,18 +514,32 @@ class RAGEngine:
             except Exception:
                 pass
 
-        # ── Pass 4: District-specific and section-specific targeting ───────────
-        # Problem: Vector similarity scoring is competitive. When a question asks
-        # for standards in a named section or district, OTHER sections with
-        # similar language (R-1, R-3, etc.) often outscore the correct section.
+        # ── Pass 4: Direct metadata retrieval for named sections/districts ────
         #
-        # Solution A — Named zoning districts: Map district name → section number
-        # and issue a targeted query using the section number as the query text.
+        # WHY SIMILARITY-BASED RETRIEVAL FAILS HERE:
+        #   All zoning district technical-standards sections use identical
+        #   language ("minimum required lot area", "maximum lot coverage", etc.).
+        #   When the question asks for R-2 standards, R-1, R-3, and R-4 chunks
+        #   score equally high in vector similarity — the correct section loses
+        #   the ranking competition every time.
         #
-        # Solution B — Explicit section references: If the user mentions a
-        # section number (e.g. "Sec. 56-31", "78-164", "section 78-486"),
-        # force-retrieve chunks with that section_number in their metadata.
-        # This works for ANY chapter, not just zoning.
+        # THE FIX — metadata filtering, not similarity:
+        #   Every chunk has a `section_number` metadata field (e.g. "78-164").
+        #   ChromaDB's `where` clause retrieves chunks by metadata value directly,
+        #   bypassing similarity scoring entirely. This guarantees the correct
+        #   section is always included in context — no scoring competition.
+        #
+        # TWO TRIGGER PATHS:
+        #
+        #   Path A — Named zoning district in question:
+        #     "R-2" → section_number "78-164"
+        #     "R-1" → section_number "78-124"  etc.
+        #     Filters to doc_id="ch78" for efficiency.
+        #
+        #   Path B — Explicit section number in question:
+        #     "Sec. 56-31", "section 78-164", "78-486" → section_number match
+        #     Searches all docs (any chapter can be referenced).
+        #     Works for stormwater, streets, utilities — any chapter.
         #
         # DISTRICT → SECTION NUMBER MAP (Chapter 78, City of Brentwood):
         #   R-1  → 78-124   R-2  → 78-164   R-3  → 78-204   R-4  → 78-244
@@ -542,43 +556,71 @@ class RAGEngine:
             "osrd": ("78-284", "ch78"),
         }
 
-        # Check for named zoning district in question
         target_section = None
         target_doc_id  = None
+
+        # Path A: named zoning district
         for district_kw, (section_num, doc_id) in DISTRICT_SECTION_MAP.items():
             if district_kw in question_lower:
                 target_section = section_num
                 target_doc_id  = doc_id
                 break
 
-        # Check for explicit section number reference in question
-        # Matches patterns like: "Sec. 56-31", "section 78-164", "78-486"
+        # Path B: explicit section number anywhere in question
+        # Matches: "Sec. 56-31", "section 78-164", "78-486", "sec 14-22"
         if not target_section:
             sec_match = re.search(
                 r'(?:sec(?:tion)?\.?\s*)?(\d{2,3}-\d{1,4})', question_lower
             )
             if sec_match:
                 target_section = sec_match.group(1)
-                target_doc_id  = None  # search all docs, not just ch78
+                target_doc_id  = None  # any chapter
 
         if target_section:
             try:
-                section_query = (
-                    f"Sec. {target_section} technical standards "
-                    f"dimensional requirements minimum"
+                # Build the metadata where clause
+                where_clause = {"section_number": {"$eq": target_section}}
+                if target_doc_id:
+                    where_clause = {
+                        "$and": [
+                            {"doc_id":        {"$eq": target_doc_id}},
+                            {"section_number": {"$eq": target_section}},
+                        ]
+                    }
+
+                # Use collection.get() — pure metadata filter, no similarity.
+                # This retrieves ALL chunks whose section_number matches,
+                # regardless of their vector similarity to the question.
+                direct_results = self.collection.get(
+                    where=where_clause,
+                    include=["documents", "metadatas"],
                 )
-                where_filter = (
-                    {"doc_id": target_doc_id}
-                    if target_doc_id
-                    else None
-                )
-                section_results = self.collection.query(
-                    query_texts=[section_query],
-                    n_results=8,
-                    **({"where": where_filter} if where_filter else {}),
-                    include=["documents", "metadatas", "distances"],
-                )
-                chunks.extend(_parse_results(section_results, min_similarity=0.25))
+
+                if direct_results["documents"]:
+                    ids = direct_results.get("ids", [])
+                    for i, (text, meta) in enumerate(zip(
+                        direct_results["documents"],
+                        direct_results["metadatas"],
+                    )):
+                        chunk_id = ids[i] if i < len(ids) else f"direct_{i}"
+                        if chunk_id in seen_chunk_ids:
+                            continue
+                        seen_chunk_ids.add(chunk_id)
+                        # Assign a high similarity so these chunks sort near
+                        # the top — they are directly relevant by definition.
+                        chunks.append({
+                            "text":            text,
+                            "similarity":      0.90,
+                            "chunk_id":        chunk_id,
+                            "doc_id":          meta.get("doc_id", ""),
+                            "doc_title":       meta.get("doc_title", "Unknown Document"),
+                            "content_type":    meta.get("content_type", ""),
+                            "section_number":  meta.get("section_number", ""),
+                            "section_title":   meta.get("section_title", ""),
+                            "source_citation": meta.get("source_citation", ""),
+                            "article":         meta.get("article", ""),
+                            "division":        meta.get("division", ""),
+                        })
             except Exception:
                 pass
 
