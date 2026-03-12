@@ -71,7 +71,7 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 # How many chunks to retrieve from ChromaDB per query.
 # More chunks = more context = better coverage but higher token cost.
 # 8 is a good balance for municipal policy questions.
-TOP_K_CHUNKS = 8
+TOP_K_CHUNKS = 12
 
 # Minimum similarity score (0.0–1.0) to include a chunk.
 # Chunks below this threshold are discarded as probably irrelevant.
@@ -679,10 +679,14 @@ ANSWER REQUIREMENTS:
 2. Use superscript numbers (¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸) inline to cite your sources.
    Example: "The minimum buffer width is 50 feet.¹ Perennial streams require 75 feet.²"
 3. Include specific numbers, measurements, and requirements from the sources.
-4. If a table or list of values is relevant, present it clearly.
-5. Do not use markdown formatting (no **, no ##, no ---).
-6. Do not include information that is not in the provided context.
-7. If the context does not contain enough information to answer the question,
+4. CRITICAL: You must synthesize ALL provided context blocks. Do not stop after
+   the first source that partially answers the question. If multiple context blocks
+   contain relevant details (e.g. paved vs. unpaved distinctions, cross slopes,
+   additional conditions), you must include all of them in your answer.
+5. If a table or list of values is relevant, present it clearly.
+6. Do not use markdown formatting (no **, no ##, no ---).
+7. Do not include information that is not in the provided context.
+8. If the context does not contain enough information to answer the question,
    respond with exactly: "ABSTAIN: The provided documents do not contain
    sufficient information to answer this question. Please consult the
    Engineering Manual directly or contact the City Engineer."
