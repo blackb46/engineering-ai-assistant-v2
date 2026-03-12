@@ -514,6 +514,74 @@ class RAGEngine:
             except Exception:
                 pass
 
+        # ── Pass 4: District-specific and section-specific targeting ───────────
+        # Problem: Vector similarity scoring is competitive. When a question asks
+        # for standards in a named section or district, OTHER sections with
+        # similar language (R-1, R-3, etc.) often outscore the correct section.
+        #
+        # Solution A — Named zoning districts: Map district name → section number
+        # and issue a targeted query using the section number as the query text.
+        #
+        # Solution B — Explicit section references: If the user mentions a
+        # section number (e.g. "Sec. 56-31", "78-164", "section 78-486"),
+        # force-retrieve chunks with that section_number in their metadata.
+        # This works for ANY chapter, not just zoning.
+        #
+        # DISTRICT → SECTION NUMBER MAP (Chapter 78, City of Brentwood):
+        #   R-1  → 78-124   R-2  → 78-164   R-3  → 78-204   R-4  → 78-244
+        #   AR   → 78-84    OSRD → 78-284
+        DISTRICT_SECTION_MAP = {
+            "r-2":  ("78-164", "ch78"),
+            " r2 ": ("78-164", "ch78"),
+            "r-1":  ("78-124", "ch78"),
+            " r1 ": ("78-124", "ch78"),
+            "r-3":  ("78-204", "ch78"),
+            " r3 ": ("78-204", "ch78"),
+            "r-4":  ("78-244", "ch78"),
+            " r4 ": ("78-244", "ch78"),
+            "osrd": ("78-284", "ch78"),
+        }
+
+        # Check for named zoning district in question
+        target_section = None
+        target_doc_id  = None
+        for district_kw, (section_num, doc_id) in DISTRICT_SECTION_MAP.items():
+            if district_kw in question_lower:
+                target_section = section_num
+                target_doc_id  = doc_id
+                break
+
+        # Check for explicit section number reference in question
+        # Matches patterns like: "Sec. 56-31", "section 78-164", "78-486"
+        if not target_section:
+            sec_match = re.search(
+                r'(?:sec(?:tion)?\.?\s*)?(\d{2,3}-\d{1,4})', question_lower
+            )
+            if sec_match:
+                target_section = sec_match.group(1)
+                target_doc_id  = None  # search all docs, not just ch78
+
+        if target_section:
+            try:
+                section_query = (
+                    f"Sec. {target_section} technical standards "
+                    f"dimensional requirements minimum"
+                )
+                where_filter = (
+                    {"doc_id": target_doc_id}
+                    if target_doc_id
+                    else None
+                )
+                section_results = self.collection.query(
+                    query_texts=[section_query],
+                    n_results=8,
+                    **({"where": where_filter} if where_filter else {}),
+                    include=["documents", "metadatas", "distances"],
+                )
+                chunks.extend(_parse_results(section_results, min_similarity=0.25))
+            except Exception:
+                pass
+
         # Sort all chunks by similarity, best first
         chunks.sort(key=lambda c: c["similarity"], reverse=True)
         return chunks
@@ -785,39 +853,49 @@ CITATION NUMBERS ASSIGNED TO THE ABOVE SOURCES:
 QUESTION: {question}
 {discrepancy_instruction}
 
-IMPORTANT — HOW TO READ MUNICIPAL CODE CONTEXT:
-Municipal code text uses numbered list formatting like:
+CRITICAL — HOW TO READ MUNICIPAL CODE CONTEXT:
+Municipal code stores requirements as inline numbered items. Example:
   "(1) Minimum required lot area, one acre. (2) Maximum lot coverage by all
-   buildings, 25 percent. (3) Minimum required lot width at building line, 125 feet."
-Each numbered item IS a specific policy requirement. Read ALL numbered items in
-every context block — they contain the exact dimensional standards, measurements,
-and requirements you must use to answer the question. Do not skip or overlook
-numbered items. If a context block contains numbered items that directly answer
-the question, you MUST use them — do not abstain.
+   buildings, 25 percent. (3) Minimum required lot width at building line, 125
+   feet. (4) Minimum required front yard setback, 75 feet."
+
+EACH NUMBERED ITEM IS A COMPLETE, BINDING REQUIREMENT. When a context block
+contains a section labeled "Technical standards" or "Minimum standards" with
+numbered items, those items ARE the full answer. You must enumerate ALL of them.
+
+If the question asks for "technical standards" or "dimensional standards" or
+"development standards" for a named district or section, and ANY context block
+contains a numbered list from that section, your answer MUST list every numbered
+item from that section. Do not summarize. Do not paraphrase into a shorter list.
+Do not abstain. Present each requirement on its own line in this format:
+  (1) [requirement text]
+  (2) [requirement text]
+  ...and so on for all items found across all context blocks for that section.
+
+If a section's items are split across multiple context blocks (e.g. items 1-8
+in one block, items 9-11 in another), combine them into one complete list.
 
 ANSWER REQUIREMENTS:
-1. Start with a direct, specific answer in the first sentence.
-2. Use superscript numbers (¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸) inline to cite your sources.
-   Example: "The minimum buffer width is 50 feet.¹ Perennial streams require 75 feet.²"
-   CRITICAL: Only cite sources you actually use in your answer. Do not cite a
-   source number unless that source directly supports the statement it follows.
-   It is perfectly acceptable to use only 1-3 citation numbers if only 1-3
-   sources are relevant. Do not cite sources just because they were provided.
-3. Include specific numbers, measurements, and requirements from the sources.
-4. CRITICAL: You must synthesize ALL provided context blocks. Do not stop after
-   the first source that partially answers the question. If multiple context blocks
-   contain relevant details (e.g. paved vs. unpaved distinctions, cross slopes,
-   additional conditions), you must include all of them in your answer.
-5. If a table or list of values is relevant, present it clearly.
+1. Start with a direct sentence identifying which section and district applies.
+2. Then list ALL numbered requirements found in the context for that section.
+3. Use superscript numbers (¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸) inline to cite your sources.
+   Place the citation superscript once, after the introductory sentence.
+   Example: "The following minimum technical standards apply to the R-2 district
+   per Sec. 78-164:¹ (1) Minimum required lot area, one acre. (2) ..."
+   CRITICAL: Only cite sources you actually used. Do not cite a source number
+   unless that source directly supports the statement it follows.
+4. Include ALL specific numbers, measurements, and requirements from the context.
+5. CRITICAL: Synthesize ALL provided context blocks. Items 1-8 may be in one
+   block and items 9-11 in another — combine them. Never stop at the first block.
 6. Do not use markdown formatting (no **, no ##, no ---).
 7. Do not include information that is not in the provided context.
-8. Only use ABSTAIN if — after carefully reading every numbered item in every
-   context block — the information genuinely does not exist in the provided
+8. ABSTAIN only if — after carefully reading EVERY numbered item in EVERY context
+   block — the information genuinely does not exist anywhere in the provided
    context. Never abstain when numbered list items directly answer the question.
-   If the context does not contain enough information to answer the question,
-   respond with exactly: "ABSTAIN: The provided documents do not contain
-   sufficient information to answer this question. Please consult the
-   Engineering Manual directly or contact the City Engineer."
+   If the context truly does not contain enough information, respond with exactly:
+   "ABSTAIN: The provided documents do not contain sufficient information to
+   answer this question. Please consult the Engineering Manual directly or
+   contact the City Engineer."
 
 Write your answer now:"""
 
