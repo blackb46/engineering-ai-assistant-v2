@@ -9,6 +9,13 @@ import sys
 from pathlib import Path
 import streamlit as st
 
+# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
+# Streamlit 1.43+ file watcher crashes when it inspects torch.classes internals.
+# This suppresses the error by excluding torch from the watcher path scan.
+# Safe to remove if a future Streamlit version resolves this upstream.
+import torch
+torch.classes.__path__ = []   # prevents RuntimeError: Tried to instantiate class '__path__._path'
+
 # Add utils/ to path for RAG/DB modules; repo root is already on sys.path
 sys.path.append(str(Path(__file__).parent / "utils"))
 
