@@ -179,11 +179,17 @@ class RAGEngine:
 
         # Create embedding function — must match what build_corpus.py used.
         #
-        # HUGGINGFACE RATE LIMIT FIX:
-        # Streamlit Cloud shares IP addresses across many deployments. HuggingFace
-        # rate-limits (HTTP 429) anonymous downloads from these shared IPs.
-        # Solution: pass an HF_TOKEN from Streamlit secrets if available, and
-        # set the cache folder so the model is only downloaded once per deployment.
+        # MODEL LOADING STRATEGY (fastest to slowest):
+        #
+        # 1. BUNDLED (instant, ~2s): If models/all-MiniLM-L6-v2 exists in the repo,
+        #    load directly from disk. No network needed. Run download_model_to_repo.py
+        #    in Colab once to set this up.
+        #
+        # 2. CACHED (fast after first run): If HF_TOKEN is set in Streamlit secrets,
+        #    downloads authenticated (~15s). Subsequent loads use the session cache.
+        #
+        # 3. ANONYMOUS (slow, may rate-limit): Falls back to unauthenticated download.
+        #    Streamlit Cloud's shared IPs often hit HuggingFace's 429 rate limit.
         import os
         hf_token = None
         try:
@@ -191,17 +197,23 @@ class RAGEngine:
         except Exception:
             pass
 
-        # Point sentence-transformers cache to a writable location on Streamlit Cloud
-        # so the model survives within a session and isn't re-downloaded each time.
-        cache_dir = os.environ.get(
-            "SENTENCE_TRANSFORMERS_HOME",
-            str(Path(__file__).parent.parent / ".cache" / "sentence_transformers")
-        )
+        # Check for bundled model in the repo first (fastest path)
+        bundled_model_path = Path(__file__).parent.parent / "models" / EMBEDDING_MODEL
+        if bundled_model_path.exists() and any(bundled_model_path.iterdir()):
+            # Load from local disk — no HuggingFace download required
+            model_source = str(bundled_model_path)
+            print(f"Loading embedding model from bundled repo path: {model_source}")
+        else:
+            # Fall back to HuggingFace download
+            model_source = EMBEDDING_MODEL
+            cache_dir = str(Path(__file__).parent.parent / ".cache" / "sentence_transformers")
+            print(f"Bundled model not found — downloading {EMBEDDING_MODEL} from HuggingFace...")
 
         embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=EMBEDDING_MODEL,
-            cache_folder=cache_dir,
-            **({"token": hf_token} if hf_token else {}),
+            model_name=model_source,
+            **({"cache_folder": str(Path(__file__).parent.parent / ".cache" / "sentence_transformers")}
+               if model_source == EMBEDDING_MODEL else {}),
+            **({"token": hf_token} if (hf_token and model_source == EMBEDDING_MODEL) else {}),
         )
 
         # Connect to ChromaDB
