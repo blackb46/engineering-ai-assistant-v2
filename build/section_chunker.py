@@ -567,9 +567,12 @@ class SectionChunker:
         """Detect section starts in Municipal Code chapters."""
         match = MUNICODE_SEC_PATTERN.match(text)
         if match and style == 'Normal':
-            sec_num = match.group(1)
+            sec_num_raw = match.group(1)
             # Clean title: remove trailing period and footnote markers
             sec_title = re.sub(r'\[\d+\]', '', match.group(2)).strip().rstrip('.')
+            # Route through uniqueness check — handles duplicate section headers
+            # that can appear when post_processor injects prose paragraphs.
+            sec_num = self._make_unique_section_number(sec_num_raw)
             return DocumentSection(
                 article=self._current_article,
                 division=self._current_division,
@@ -584,8 +587,10 @@ class SectionChunker:
         """Detect section starts in Appendix A."""
         match = APPENDIX_SEC_PATTERN.match(text)
         if match:
-            sec_num = match.group(1)
+            sec_num_raw = match.group(1)
             sec_title = re.sub(r'\[\d+\]', '', match.group(2)).strip().rstrip('.')
+            # Route through uniqueness check — same reason as municode above.
+            sec_num = self._make_unique_section_number(sec_num_raw)
             return DocumentSection(
                 article=self._current_article,
                 division=self._current_division,
