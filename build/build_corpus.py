@@ -383,6 +383,7 @@ sys.path.insert(0, str(Path(__file__).parent))          # build/ dir
 sys.path.insert(0, str(Path(__file__).parent.parent))   # repo root
 
 from section_chunker import chunk_document
+from post_processor import preprocess_document
 
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
@@ -734,15 +735,32 @@ def build_corpus():
         log(f"\n[{i}/{len(docs_to_process)}] {entry['doc_id']} — {entry['filename'][:55]}")
 
         try:
-            # Chunk the document
-            log(f"  Chunking ({entry['doc_type']})...")
-            chunks = chunk_document(
-                filepath=str(doc_path),
-                doc_id=entry["doc_id"],
-                doc_title=entry["title"],
-                doc_type=entry["doc_type"],
-                citation_format=entry["citation_format"],
+            # Pre-process: inject prose summaries after list groups.
+            # This ensures list-style content is never lost to chunk boundary
+            # splits. The original DOCX on Google Drive is never modified.
+            # See build/post_processor.py for full documentation.
+            log(f"  Pre-processing (injecting prose summaries)...")
+            processed_path = preprocess_document(
+                str(doc_path), doc_id=entry["doc_id"]
             )
+
+            # Chunk the pre-processed document — same call as before,
+            # just pointing at the temp file instead of the original.
+            log(f"  Chunking ({entry['doc_type']})...")
+            try:
+                chunks = chunk_document(
+                    filepath=processed_path,
+                    doc_id=entry["doc_id"],
+                    doc_title=entry["title"],
+                    doc_type=entry["doc_type"],
+                    citation_format=entry["citation_format"],
+                )
+            finally:
+                # Always delete the temp file whether chunking succeeded or not
+                try:
+                    os.unlink(processed_path)
+                except Exception:
+                    pass
             log(f"  {len(chunks)} chunks produced.")
 
             if not chunks:
