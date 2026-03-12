@@ -59,7 +59,7 @@ st.markdown("""
         padding: 0.65rem 1rem;
         border-left: 4px solid #F07138;
         margin: 1.2rem 0 0.5rem 0;
-        font-family: 'Inter Tight', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
         font-size: 0.97rem;
         font-weight: 700;
         letter-spacing: 0.02em;
@@ -72,7 +72,7 @@ st.markdown("""
         border-radius: 6px;
         padding: 0.7rem 1rem;
         margin: 0.4rem 0;
-        font-family: 'Inter', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     }
     .bw-comment-box {
         background: #FFFBF0 !important;
@@ -83,7 +83,7 @@ st.markdown("""
         padding: 0.75rem 1rem;
         margin: 0.4rem 0 0.4rem 1.5rem;
         font-size: 0.9em;
-        font-family: 'Inter', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     }
     .bw-resubmittal-box {
         background: #EEF2F9 !important;
@@ -92,7 +92,7 @@ st.markdown("""
         border-radius: 8px;
         padding: 1rem 1.2rem;
         margin: 1rem 0;
-        font-family: 'Inter', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     }
     .bw-export-section {
         background: #F0FDF4 !important;
@@ -102,7 +102,7 @@ st.markdown("""
         border-radius: 8px;
         padding: 1rem 1.2rem;
         margin: 1rem 0;
-        font-family: 'Inter', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     }
     .status-yes { color: #16A34A !important; font-weight: 700; }
     .status-no  { color: #DC2626 !important; font-weight: 700; }
