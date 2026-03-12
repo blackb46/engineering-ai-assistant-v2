@@ -103,23 +103,6 @@ with col_wiz:
                  use_container_width=True, type="primary"):
         st.switch_page("pages/2_Wizard_Mode.py")
 
-# ── Usage stats ───────────────────────────────────────────────────────────────
-st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-section_heading("Usage — Last 7 Days")
-
-try:
-    stats = st.session_state.audit_logger.get_usage_stats(days=7)
-    m1, m2, m3, m4 = st.columns(4)
-    with m1: st.metric("Total Queries", stats["total_queries"])
-    with m2: st.metric("Abstentions", stats["abstention_count"],
-                       help="Questions the system could not answer from documents")
-    with m3: st.metric("Discrepancy Flags", stats["discrepancy_count"],
-                       help="Queries where Code and Policy Manual sources may conflict")
-    with m4: st.metric("Flagged by Staff", stats["flagged_responses"],
-                       help="Responses marked for review by engineering staff")
-except Exception:
-    st.caption("Usage statistics will appear here after first queries.")
-
 # ── Quick start ───────────────────────────────────────────────────────────────
 with st.expander("Quick Start Guide", expanded=False):
     col_a, col_b = st.columns(2)
@@ -195,5 +178,21 @@ with st.expander("System Status", expanded=False):
             st.markdown("""<div class="bw-status-err">
                 ✗ <strong>Claude API</strong><br>CLAUDE_API_KEY not set in secrets
             </div>""", unsafe_allow_html=True)
+
+# ── Usage stats — collapsed, below System Status ──────────────────────────────
+# Collapsed by default so the dashboard stays clean; staff can expand when needed.
+with st.expander("Usage Statistics — Last 7 Days", expanded=False):
+    try:
+        stats = st.session_state.audit_logger.get_usage_stats(days=7)
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: st.metric("Total Queries", stats["total_queries"])
+        with m2: st.metric("Abstentions", stats["abstention_count"],
+                           help="Questions the system could not answer from documents")
+        with m3: st.metric("Discrepancy Flags", stats["discrepancy_count"],
+                           help="Queries where Code and Policy Manual sources may conflict")
+        with m4: st.metric("Flagged by Staff", stats["flagged_responses"],
+                           help="Responses marked for review by engineering staff")
+    except Exception:
+        st.caption("Usage statistics will appear here after first queries.")
 
 footer()
