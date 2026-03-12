@@ -5,16 +5,15 @@ City of Brentwood Engineering AI Assistant - V2
 Main application entry point and dashboard.
 """
 
+# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
+# MUST be the very first import — before streamlit and any torch-dependent libs.
+# Streamlit 1.43+ file watcher crashes when scanning torch.classes internals.
+import torch
+torch.classes.__path__ = []
+
 import sys
 from pathlib import Path
 import streamlit as st
-
-# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
-# Streamlit 1.43+ file watcher crashes when it inspects torch.classes internals.
-# This suppresses the error by excluding torch from the watcher path scan.
-# Safe to remove if a future Streamlit version resolves this upstream.
-import torch
-torch.classes.__path__ = []   # prevents RuntimeError: Tried to instantiate class '__path__._path'
 
 # Add utils/ to path for RAG/DB modules; repo root is already on sys.path
 sys.path.append(str(Path(__file__).parent / "utils"))
@@ -88,7 +87,7 @@ with col_qa:
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
     if st.button("Open Q&A Mode →", key="qa_btn",
-                 disabled=not engine_ready, use_container_width=True, type="primary"):
+                 use_container_width=True, type="primary"):
         st.switch_page("pages/1_QA_Mode.py")
     if not engine_ready:
         st.caption("⚠ RAG engine not ready — see System Status below")
