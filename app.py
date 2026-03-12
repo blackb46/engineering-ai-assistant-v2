@@ -34,24 +34,32 @@ apply_theme()
 render_sidebar(active="home")
 
 # ── Startup ───────────────────────────────────────────────────────────────────
-# NOTE: First load after deployment takes 30–60 seconds while the AI embedding
-# model (all-MiniLM-L6-v2) downloads from HuggingFace. Subsequent loads are
-# fast because st.cache_resource keeps the engine in memory for the session.
-with st.spinner("Loading AI engine — first startup may take up to 60 seconds..."):
-    db_info = load_database()
-
-engine_ready = False
-engine_stats = {}
-engine_error = None
-
-if db_info["success"]:
+# WHY cache_resource:
+#   The old pattern called get_rag_engine() at module level, which Streamlit
+#   re-executes on every page render — including during the cold-start websocket
+#   handshake before the session is initialized. That race condition causes the
+#   "SessionInfo not initialized" popup and requires multiple button clicks before
+#   the page responds.
+#
+#   st.cache_resource runs the function body exactly ONCE per server process and
+#   returns the cached result on all subsequent calls. The engine loads once,
+#   is shared across all users and all rerenders, and never races with session init.
+@st.cache_resource(show_spinner=False)
+def _load_engine():
+    """Load database and RAG engine once. Cached for the lifetime of the app."""
+    db = load_database()
+    if not db["success"]:
+        return db, False, {}, db.get("error", "Database load failed")
     try:
-        engine = get_rag_engine(db_info["local_path"])
-        engine_ready = engine.is_ready()
-        engine_stats = engine.get_collection_stats()
-        engine_error = engine.get_init_error() if not engine_ready else None
+        eng = get_rag_engine(db["local_path"])
+        return db, eng.is_ready(), eng.get_collection_stats(), (
+            eng.get_init_error() if not eng.is_ready() else None
+        )
     except Exception as e:
-        engine_error = str(e)
+        return db, False, {}, str(e)
+
+with st.spinner("Loading AI engine..."):
+    db_info, engine_ready, engine_stats, engine_error = _load_engine()
 
 if "audit_logger" not in st.session_state:
     st.session_state.audit_logger = AuditLogger()
