@@ -5,6 +5,13 @@ City of Brentwood Engineering AI Assistant - V2
 Wizard Mode — interactive plan review checklist with export.
 """
 
+# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
+# MUST be the very first import — before streamlit, before anything that touches
+# torch. Streamlit 1.43+ file watcher crashes when scanning torch.classes.
+# This suppresses it by clearing the internal path list before Streamlit sees it.
+import torch
+torch.classes.__path__ = []
+
 import streamlit as st
 import sys
 import csv
@@ -14,12 +21,6 @@ import string
 from pathlib import Path
 from datetime import datetime
 from io import BytesIO, StringIO
-
-# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
-# Streamlit 1.43+ file watcher crashes when it inspects torch.classes internals.
-# This must be applied in every page that runs independently (not just app.py).
-import torch
-torch.classes.__path__ = []
 
 # pages/ is one level down — add both utils/ and repo root
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
