@@ -9,7 +9,9 @@ import sys
 from pathlib import Path
 import streamlit as st
 
+# pages/ is one level down — add both utils/ and repo root
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
+sys.path.append(str(Path(__file__).parent.parent))
 
 from drive_loader  import load_database
 from rag_engine    import get_rag_engine
