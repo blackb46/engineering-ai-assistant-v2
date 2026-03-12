@@ -37,6 +37,9 @@ MAINTENANCE:
     and run the Colab builder — this module handles everything automatically.
 
 FILE LOCATION: build/post_processor.py
+
+NOTE: This file belongs ONLY in build/. Do not duplicate it in utils/.
+      build_corpus.py imports from build/post_processor.py directly.
 """
 
 import os
@@ -57,9 +60,27 @@ LIST_STYLES = {
     "List Bullet", "List Bullet 2", "List Bullet 3",
     "List Number", "List Number 2", "List Number 3",
     "List Continue", "List Continue 2",
+    # Confirmed Municode DOCX styles from Chapter 78 diagnostic (March 2026):
+    # style='list1'  — numbered items like "(1) Minimum required lot area..."
+    # style='list2'  — sub-items like "(a) When the length of driveway exceeds..."
+    # style='list3'  — sub-sub-items
+    # style='list4'  — deepest nesting level
     "list1", "list2", "list3", "list4",
+    # Additional Municode styles confirmed in corpus:
+    # style='b2'   — body text continuation in some chapters
+    # style='bc1'  — body continuation level 1
+    # style='bc2'  — body continuation level 2
+    # style='p0'   — introductory paragraph before a list group
+    #               (e.g. "For all property within the R-2 zoning districts,
+    #                the following minimum technical standards shall apply...")
+    #               Including p0 ensures the intro sentence is captured in the
+    #               prose summary alongside the list items that follow it.
     "b2", "bc1", "bc2",
     "p0",
+    # Municode enumeration styles (alternative naming in some chapters)
+    "enumeration1", "enumeration2", "enumeration3",
+    "liststyle1", "liststyle2",
+    "bodyindent", "bodytextindent",
 }
 
 SKIP_STYLES = {
@@ -72,7 +93,9 @@ HEADING_STYLES = {
 }
 
 MIN_GROUP_SIZE = 2
-MAX_ITEMS_IN_SUMMARY = 10
+# Increased from 10 to 15 to handle long zoning technical standards sections
+# (e.g. Sec. 78-164 has 11 items, some sections have more)
+MAX_ITEMS_IN_SUMMARY = 15
 
 
 # ─────────────────────────────────────────────────────────────────────────────
