@@ -120,15 +120,6 @@ def main():
     _init_session_state()
 
     # ── Load engine ───────────────────────────────────────────────────────
-    # get_rag_engine() is decorated with @st.cache_resource in rag_engine.py.
-    # This means it runs once per server process and returns the cached engine
-    # on every subsequent call — including when this page rerenders after a
-    # button click. No spinner needed here: app.py already warmed the cache
-    # on first load. Calling it again is instant (cache hit).
-    #
-    # DO NOT wrap this in st.spinner or call load_database() separately here —
-    # that was the old pattern that caused the SessionInfo race condition and
-    # required multiple button clicks before the page responded.
     db_info = load_database()
     if not db_info["success"]:
         st.error(f"Database not available: {db_info['error']}")
@@ -136,6 +127,11 @@ def main():
             st.switch_page("app.py")
         return
 
+    # NOTE: No st.spinner() here — spinner calls trigger SessionInfo before
+    # the websocket is initialized, causing "Bad message format" popups.
+    # get_rag_engine() is @st.cache_resource so after the first cold start
+    # it returns instantly from cache. On cold start the status bar shows
+    # activity naturally without needing an explicit spinner.
     engine = get_rag_engine(db_info["local_path"])
     if not engine.is_ready():
         st.error(f"RAG engine not ready: {engine.get_init_error() or 'Unknown error'}")
