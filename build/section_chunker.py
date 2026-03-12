@@ -312,14 +312,6 @@ class SectionChunker:
     # Timestamp pattern — e.g. "(11/23/2015 9:12 AM MAW)"
     _TIMESTAMP_PATTERN = re.compile(r'^\(\d{1,2}/\d{1,2}/\d{4}')
 
-    # Math formula pattern — e.g. "R = A + B - (A × B) / 100"
-    # These appear in the EPM stormwater section as inline formulas.
-    # They pass isupper() because they contain no lowercase letters,
-    # but they are NOT section headings and must be excluded.
-    _MATH_FORMULA_PATTERN = re.compile(
-        r'[=+\-*/×÷]|\d+\s*[=+\-*/×÷]\s*\d+'
-    )
-
     def __init__(self):
         # Running state while processing a document
         self._current_article = ""
@@ -609,47 +601,92 @@ class SectionChunker:
             )
         return None
 
+    # Pattern to extract section number from EPM headings like:
+    #   "9. RESIDENTIAL DRIVEWAYS (Sec. 78-486)"  →  num="9", title="RESIDENTIAL DRIVEWAYS"
+    #   "10.1 Height Limits"                       →  num="10.1", title="Height Limits"
+    #   "2.2.1 Site Plan Requirements"             →  num="2.2.1", title="Site Plan Requirements"
+    _EPM_HEADING_PATTERN = re.compile(r'^(\d+(?:\.\d+)*\.?)\s+(.+)$')
+
     def _detect_epm_section(self, text: str, style: str) -> Optional[DocumentSection]:
         """
         Detect section starts in the Engineering Policy Manual.
 
-        The EPM is a hybrid document — it has:
-        1. Internal policy sections: Heading 1 style OR ALL-CAPS Normal style
-           Examples: "FOUNDATION SURVEYS", "RETAINING WALLS", "PLAN REVIEWS"
-        2. Quoted Municipal Code sections (Sec. XX-XX pattern)
-        3. "From" attribution blocks (From 78-45:, From EC Checklist, etc.)
+        The EPM (Version 3.0, March 2026) uses a clean numbered heading hierarchy:
+          Heading 1  — Major sections:    "10. RETAINING WALLS"
+          Heading 2  — Subsections:       "10.1 Height Limits"
+          Heading 3  — Sub-subsections:   "2.2.1 Site Plan Requirements"
 
-        Each becomes its own section with the appropriate content_type.
+        Each Heading 1/2/3 paragraph starts a new chunk with content_type
+        "engineering_policy".
+
+        The EPM also embeds quoted Municipal Code text (Normal style, starts
+        with "Sec. XX-XX") and "From" attribution blocks — these are kept as
+        separate chunk types for citation purposes.
+
+        NOTE: The old EPM used ALL-CAPS Normal paragraphs as headings.
+        Version 3.0 no longer uses that pattern — heading detection is now
+        purely style-based (Heading 1/2/3). The ALL-CAPS Normal fallback is
+        intentionally removed to prevent formula lines like
+        "R = A + B - (A × B) / 100" from being misdetected as headings.
         """
-        # ── Internal Engineering Policy sections ──────────────────────────
-        # Two ways these appear in the EPM:
-        #   a) Heading 1 style (only "FOUNDATION SURVEYS" uses this)
-        #   b) Normal style with ALL-CAPS text (everything else)
+        # ── Heading 1 / 2 / 3 — numbered EPM policy sections ─────────────
+        if style in ('Heading 1', 'Heading 2', 'Heading 3'):
+            heading_match = self._EPM_HEADING_PATTERN.match(text.strip())
+            if heading_match:
+                # e.g. "10. RETAINING WALLS (Sec. 78-14)" →
+                #   sec_num = "10", sec_title = "RETAINING WALLS"
+                raw_num   = heading_match.group(1).rstrip('.')
+                raw_title = heading_match.group(2).strip()
 
-        is_heading1 = (style == 'Heading 1')
+                # Strip trailing code references like "(Sec. 78-14)" or
+                # "(Subdivision Regulations 6.10)" from the title — these
+                # are navigation aids, not part of the section name
+                sec_title = re.sub(
+                    r'\s*\([^)]*(?:Sec\.|Subdivision|Regulations|Division)[^)]*\)',
+                    '', raw_title
+                ).strip()
 
-        is_allcaps_heading = (
-            style == 'Normal'
-            and text.isupper()
-            and len(text.strip()) > 3
-            and not self._EPM_TITLE_EXCLUSIONS.match(text)
-            and not self._TIMESTAMP_PATTERN.match(text)
-            and not self._MATH_FORMULA_PATTERN.search(text)
-        )
+                # Use the dotted number as the section identifier so that
+                # "10.1" is clearly a child of "10" in citations
+                sec_num = self._make_unique_section_number(raw_num)
 
-        if is_heading1 or is_allcaps_heading:
-            sec_title = text.strip().rstrip(':')  # strip trailing colon from "SIDEWALKS:"
-            sec_num = self._make_unique_section_number(sec_title)
-            return DocumentSection(
-                article=self._current_article,
-                division=self._current_division,
-                section_number=sec_num,
-                section_title=sec_title,
-                content_type="engineering_policy",
-                text=""
-            )
+                # Track article (Heading 1) and division (Heading 2) for
+                # context inheritance by child chunks
+                if style == 'Heading 1':
+                    self._current_article   = sec_title
+                    self._current_division  = ""
+                elif style == 'Heading 2':
+                    self._current_division  = sec_title
+
+                return DocumentSection(
+                    article=self._current_article,
+                    division=self._current_division,
+                    section_number=sec_num,
+                    section_title=sec_title,
+                    content_type="engineering_policy",
+                    text=""
+                )
+            else:
+                # Heading style but no number prefix (e.g. "APPENDIX A: CODE REFERENCE SUMMARY")
+                # Treat as a top-level policy section using the full text as title
+                sec_title = text.strip().rstrip(':')
+                sec_num   = self._make_unique_section_number(
+                    re.sub(r'[^a-z0-9]', '_', sec_title.lower())[:40]
+                )
+                if style == 'Heading 1':
+                    self._current_article  = sec_title
+                    self._current_division = ""
+                return DocumentSection(
+                    article=self._current_article,
+                    division=self._current_division,
+                    section_number=sec_num,
+                    section_title=sec_title,
+                    content_type="engineering_policy",
+                    text=""
+                )
 
         # ── Quoted Municipal Code sections inside the EPM ─────────────────
+        # These appear as Normal-style paragraphs starting with "Sec. XX-XX"
         municode_match = MUNICODE_SEC_PATTERN.match(text)
         if municode_match:
             sec_num_raw = municode_match.group(1)
@@ -915,7 +952,17 @@ class SectionChunker:
                 return base
 
         elif ct == "engineering_policy":
-            return f"City of Brentwood Engineering Dept. Policy Manual — {sec_title}"
+            # Include the dotted section number for precision:
+            #   "City of Brentwood Engineering Dept. Policy Manual — Sec. 10.1: Height Limits"
+            # For top-level sections without a numeric prefix (e.g. appendix headers),
+            # fall back to title only.
+            if sec_num and re.match(r'^\d', sec_num):
+                return (
+                    f"City of Brentwood Engineering Dept. Policy Manual — "
+                    f"Sec. {sec_num}: {sec_title}"
+                )
+            else:
+                return f"City of Brentwood Engineering Dept. Policy Manual — {sec_title}"
 
         elif ct == "code_reference":
             return (
