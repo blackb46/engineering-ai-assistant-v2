@@ -15,6 +15,12 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO, StringIO
 
+# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
+# Streamlit 1.43+ file watcher crashes when it inspects torch.classes internals.
+# This must be applied in every page that runs independently (not just app.py).
+import torch
+torch.classes.__path__ = []
+
 # pages/ is one level down — add both utils/ and repo root
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
 sys.path.append(str(Path(__file__).parent.parent))
