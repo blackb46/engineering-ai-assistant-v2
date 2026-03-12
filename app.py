@@ -165,94 +165,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SYSTEM STATUS
-# ─────────────────────────────────────────────────────────────────────────────
-
-st.subheader("⚙️ System Status")
-
-col_db, col_engine, col_api = st.columns(3)
-
-# Database status
-with col_db:
-    if db_info["success"]:
-        sync_ts   = db_info.get("sync_timestamp", "unknown")
-        size_mb   = db_info.get("size_mb", 0)
-        cached    = db_info.get("from_cache", False)
-        cache_note = " (cached)" if cached else ""
-        st.markdown(f"""
-        <div class="status-ok">
-            ✅ <strong>Document Database</strong><br>
-            {size_mb} MB | Ready<br>
-            <small>Last updated: {sync_ts}</small>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div class="status-err">
-            ❌ <strong>Document Database</strong><br>
-            {db_info.get('error', 'Unknown error')[:120]}
-        </div>
-        """, unsafe_allow_html=True)
-
-# RAG engine status
-with col_engine:
-    if engine_ready:
-        chunk_count = engine_stats.get("total_chunks", 0)
-        collection  = engine_stats.get("collection_name", "")
-        st.markdown(f"""
-        <div class="status-ok">
-            ✅ <strong>RAG Engine</strong><br>
-            {chunk_count:,} chunks indexed<br>
-            <small>Collection: {collection}</small>
-        </div>
-        """, unsafe_allow_html=True)
-    elif db_info["success"]:
-        st.markdown(f"""
-        <div class="status-err">
-            ❌ <strong>RAG Engine</strong><br>
-            {str(engine_error or 'Initialization failed')[:120]}
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="status-warn">
-            ⚠️ <strong>RAG Engine</strong><br>
-            Waiting for database
-        </div>
-        """, unsafe_allow_html=True)
-
-# Claude API status
-with col_api:
-    try:
-        api_key_set = bool(st.secrets.get("CLAUDE_API_KEY"))
-    except Exception:
-        api_key_set = False
-
-    if api_key_set and engine_ready:
-        model = engine_stats.get("claude_model", "claude-sonnet")
-        st.markdown(f"""
-        <div class="status-ok">
-            ✅ <strong>Claude API</strong><br>
-            Configured and ready<br>
-            <small>{model}</small>
-        </div>
-        """, unsafe_allow_html=True)
-    elif api_key_set:
-        st.markdown("""
-        <div class="status-warn">
-            ⚠️ <strong>Claude API</strong><br>
-            Key configured — engine not ready
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="status-err">
-            ❌ <strong>Claude API</strong><br>
-            CLAUDE_API_KEY not set in secrets
-        </div>
-        """, unsafe_allow_html=True)
-
 # Hard stop if database failed — app cannot function without it
 if not db_info["success"]:
     st.error(
@@ -374,6 +286,87 @@ with st.expander("📚 Quick Start Guide"):
 # ─────────────────────────────────────────────────────────────────────────────
 # FOOTER
 # ─────────────────────────────────────────────────────────────────────────────
+
+st.markdown("---")
+
+# ── System Status (collapsed by default) ──────────────────────────────────────
+with st.expander("⚙️ System Status", expanded=False):
+    col_db, col_engine, col_api = st.columns(3)
+
+    with col_db:
+        if db_info["success"]:
+            sync_ts = db_info.get("sync_timestamp", "unknown")
+            size_mb = db_info.get("size_mb", 0)
+            st.markdown(f"""
+            <div class="status-ok">
+                ✅ <strong>Document Database</strong><br>
+                {size_mb} MB | Ready<br>
+                <small>Last updated: {sync_ts}</small>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="status-err">
+                ❌ <strong>Document Database</strong><br>
+                {db_info.get('error', 'Unknown error')[:120]}
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col_engine:
+        if engine_ready:
+            chunk_count = engine_stats.get("total_chunks", 0)
+            collection  = engine_stats.get("collection_name", "")
+            st.markdown(f"""
+            <div class="status-ok">
+                ✅ <strong>RAG Engine</strong><br>
+                {chunk_count:,} chunks indexed<br>
+                <small>Collection: {collection}</small>
+            </div>
+            """, unsafe_allow_html=True)
+        elif db_info["success"]:
+            st.markdown(f"""
+            <div class="status-err">
+                ❌ <strong>RAG Engine</strong><br>
+                {str(engine_error or 'Initialization failed')[:120]}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="status-warn">
+                ⚠️ <strong>RAG Engine</strong><br>
+                Waiting for database
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col_api:
+        try:
+            api_key_set = bool(st.secrets.get("CLAUDE_API_KEY"))
+        except Exception:
+            api_key_set = False
+
+        if api_key_set and engine_ready:
+            model = engine_stats.get("claude_model", "claude-sonnet")
+            st.markdown(f"""
+            <div class="status-ok">
+                ✅ <strong>Claude API</strong><br>
+                Configured and ready<br>
+                <small>{model}</small>
+            </div>
+            """, unsafe_allow_html=True)
+        elif api_key_set:
+            st.markdown("""
+            <div class="status-warn">
+                ⚠️ <strong>Claude API</strong><br>
+                Key configured — engine not ready
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="status-err">
+                ❌ <strong>Claude API</strong><br>
+                CLAUDE_API_KEY not set in secrets
+            </div>
+            """, unsafe_allow_html=True)
 
 st.markdown("---")
 st.markdown(
