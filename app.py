@@ -15,11 +15,11 @@ sys.path.append(str(Path(__file__).parent / "utils"))
 from drive_loader import load_database, get_db_status_for_admin
 from rag_engine   import get_rag_engine
 from database     import AuditLogger
-from theme        import apply_theme, render_sidebar, page_header, section_heading, footer
+from theme        import apply_theme, render_sidebar, page_header, section_heading, footer, get_favicon
 
 st.set_page_config(
     page_title="Engineering AI Assistant — City of Brentwood, TN",
-    page_icon="🏛",
+    page_icon=get_favicon(),
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -51,7 +51,6 @@ if "audit_logger" not in st.session_state:
 page_header(
     title="Engineering AI Assistant",
     subtitle="City of Brentwood, Tennessee — Engineering Department",
-    icon_html="🏛",
 )
 
 if not db_info["success"]:
