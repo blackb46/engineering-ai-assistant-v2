@@ -223,6 +223,7 @@ p, li, span, div {
     color: rgba(255,255,255,0.8);
     margin: 0.3rem 0 0;
     letter-spacing: 0.01em;
+    text-align: center;
 }
 
 /* ── Section heading style ────────────────────────────────────────── */
@@ -619,10 +620,17 @@ def render_sidebar(active: str = "home"):
         active: "home" | "qa" | "wizard"
     """
     with st.sidebar:
-        # ── Color crest — fills full sidebar width ──────────────────────
-        logo_path_rgb = _get_logo_path(color=True)
-        if logo_path_rgb:
-            st.image(str(logo_path_rgb), use_container_width=True)
+        # ── Color crest — fixed 120px width, centered ────────────────────
+        # use_container_width=True made the logo span the full sidebar and
+        # appear oversized. 120px is roughly half that and looks proportional.
+        logo_b64_sidebar = _logo_b64(color=True)
+        if logo_b64_sidebar:
+            st.markdown(
+                f"<div style='display:flex;justify-content:center;padding:1rem 0 0.5rem;'>"
+                f"<img src='{logo_b64_sidebar}' style='width:120px;height:auto;' alt='City of Brentwood Seal'>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
         # ── Department title beneath logo ────────────────────────────────
         st.markdown(
@@ -683,6 +691,7 @@ def _nav_link(page: str, label: str, is_active: bool, icon: str = ""):
 def page_header(title: str, subtitle: str = ""):
     """
     Render the standard Brentwood navy page header band with color crest logo.
+    Logo is on the left at 80px; title and subtitle are centered in the band.
 
     ARGS:
         title:    Main page title (serif font)
@@ -692,7 +701,7 @@ def page_header(title: str, subtitle: str = ""):
 
     logo_block = (
         f"<img src='{logo_uri}' style='"
-        f"height:64px;width:auto;flex-shrink:0;"
+        f"height:80px;width:auto;flex-shrink:0;"
         f"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));'"
         f" alt='City of Brentwood Seal'>"
     ) if logo_uri else ""
@@ -705,7 +714,7 @@ def page_header(title: str, subtitle: str = ""):
         f"""
         <div class="bw-page-header">
             {logo_block}
-            <div>
+            <div style="flex:1;text-align:center;">
                 <h1>{title}</h1>
                 {sub_block}
             </div>
