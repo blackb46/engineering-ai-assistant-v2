@@ -34,32 +34,32 @@ apply_theme()
 render_sidebar(active="home")
 
 # ── Startup ───────────────────────────────────────────────────────────────────
-# WHY cache_resource:
-#   The old pattern called get_rag_engine() at module level, which Streamlit
-#   re-executes on every page render — including during the cold-start websocket
-#   handshake before the session is initialized. That race condition causes the
-#   "SessionInfo not initialized" popup and requires multiple button clicks before
-#   the page responds.
+# load_database() and get_rag_engine() are both decorated with
+# @st.cache_resource — they run once per server process and return
+# instantly on all subsequent calls (page navigations, button clicks).
 #
-#   st.cache_resource runs the function body exactly ONCE per server process and
-#   returns the cached result on all subsequent calls. The engine loads once,
-#   is shared across all users and all rerenders, and never races with session init.
-@st.cache_resource(show_spinner=False)
-def _load_engine():
-    """Load database and RAG engine once. Cached for the lifetime of the app."""
-    db = load_database()
-    if not db["success"]:
-        return db, False, {}, db.get("error", "Database load failed")
-    try:
-        eng = get_rag_engine(db["local_path"])
-        return db, eng.is_ready(), eng.get_collection_stats(), (
-            eng.get_init_error() if not eng.is_ready() else None
-        )
-    except Exception as e:
-        return db, False, {}, str(e)
+# DO NOT wrap these in st.spinner at module level. Streamlit re-executes
+# app.py on every navigation back to the dashboard. A module-level spinner
+# races with the websocket SessionInfo initialization and produces the
+# "Bad message format / SessionInfo not initialized" error popup.
+#
+# On cold start the engine takes 15–30 seconds to load (HuggingFace model
+# download). During that window the dashboard renders with the System Status
+# section showing the loading state — no spinner needed.
+db_info = load_database()
 
-with st.spinner("Loading AI engine..."):
-    db_info, engine_ready, engine_stats, engine_error = _load_engine()
+engine_ready = False
+engine_stats = {}
+engine_error = None
+
+if db_info["success"]:
+    try:
+        engine = get_rag_engine(db_info["local_path"])
+        engine_ready = engine.is_ready()
+        engine_stats = engine.get_collection_stats()
+        engine_error = engine.get_init_error() if not engine_ready else None
+    except Exception as e:
+        engine_error = str(e)
 
 if "audit_logger" not in st.session_state:
     st.session_state.audit_logger = AuditLogger()
