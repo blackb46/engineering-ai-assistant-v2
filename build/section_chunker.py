@@ -630,7 +630,8 @@ class SectionChunker:
         "R = A + B - (A × B) / 100" from being misdetected as headings.
         """
         # ── Heading 1 / 2 / 3 — numbered EPM policy sections ─────────────
-        if style in ('Heading 1', 'Heading 2', 'Heading 3'):
+        if style in ('Heading 1', 'Heading 2', 'Heading 3',
+                     'Heading1', 'Heading2', 'Heading3'):
             heading_match = self._EPM_HEADING_PATTERN.match(text.strip())
             if heading_match:
                 # e.g. "10. RETAINING WALLS (Sec. 78-14)" →
@@ -652,10 +653,10 @@ class SectionChunker:
 
                 # Track article (Heading 1) and division (Heading 2) for
                 # context inheritance by child chunks
-                if style == 'Heading 1':
+                if style in ('Heading 1', 'Heading1'):
                     self._current_article   = sec_title
                     self._current_division  = ""
-                elif style == 'Heading 2':
+                elif style in ('Heading 2', 'Heading2'):
                     self._current_division  = sec_title
 
                 return DocumentSection(
@@ -673,7 +674,7 @@ class SectionChunker:
                 sec_num   = self._make_unique_section_number(
                     re.sub(r'[^a-z0-9]', '_', sec_title.lower())[:40]
                 )
-                if style == 'Heading 1':
+                if style in ('Heading 1', 'Heading1'):
                     self._current_article  = sec_title
                     self._current_division = ""
                 return DocumentSection(
