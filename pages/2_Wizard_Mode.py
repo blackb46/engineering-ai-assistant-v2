@@ -844,3 +844,9 @@ def main():
             st.switch_page("pages/1_QA_Mode.py")
 
     footer()
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+# Streamlit runs this file as __main__, so this block executes on every page load.
+if __name__ == "__main__":
+    main()
