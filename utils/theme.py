@@ -102,11 +102,19 @@ def get_favicon():
 
 # ── Master CSS ────────────────────────────────────────────────────────────────
 _CSS = """
-/* ── Google Fonts ─────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700&display=swap');
+/* ── Font stack — system fonts only, no external network calls ─────── */
+/* Inter ships as a system font on Windows 11, macOS 13+, and most     */
+/* modern Linux distros. Falls back gracefully on all other platforms.  */
+/* Georgia handles serif headings (was Source Serif 4).                 */
+/* No @import — zero network round-trips on every page render.          */
 
 /* ── Root tokens ──────────────────────────────────────────────────── */
 :root {
+    --font-sans:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                   Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue',
+                   Arial, sans-serif;
+    --font-serif:  Georgia, 'Times New Roman', Times, serif;
+    --font-tight:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     --navy:      #22427C;
     --midblue:   #2F5C9C;
     --orange:    #F07138;
@@ -123,13 +131,13 @@ _CSS = """
 /* ── Page background ──────────────────────────────────────────────── */
 .stApp {
     background-color: var(--bg) !important;
-    font-family: 'Inter', sans-serif !important;
+    font-family: var(--font-sans) !important;
     font-size: 0.95rem !important;
     line-height: 1.6 !important;
     color: var(--text-dark) !important;
 }
 p, li, span, div {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 
 /* ── Hide default Streamlit nav ───────────────────────────────────── */
@@ -153,7 +161,7 @@ p, li, span, div {
     padding: 0.6rem 1rem;
     border-radius: var(--radius);
     color: var(--text-mid) !important;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
     font-size: 0.92rem;
     font-weight: 500;
     text-decoration: none;
@@ -183,7 +191,7 @@ p, li, span, div {
     text-transform: uppercase;
     color: var(--text-mid);
     padding: 0.8rem 1rem 0.3rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 .bw-nav-divider {
     border: none;
@@ -194,7 +202,7 @@ p, li, span, div {
     font-size: 0.75rem;
     color: var(--text-mid);
     padding: 0.4rem 1rem 1rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 
 /* ── Page header band ─────────────────────────────────────────────── */
@@ -208,7 +216,7 @@ p, li, span, div {
     gap: 1.2rem;
 }
 .bw-page-header h1 {
-    font-family: 'Source Serif 4', serif;
+    font-family: var(--font-serif);
     font-size: 1.75rem;
     font-weight: 700;
     color: var(--white) !important;
@@ -217,7 +225,7 @@ p, li, span, div {
     letter-spacing: -0.01em;
 }
 .bw-page-header .subtitle {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
     font-size: 0.93rem;
     font-weight: 400;
     color: rgba(255,255,255,0.8);
@@ -228,7 +236,7 @@ p, li, span, div {
 
 /* ── Section heading style ────────────────────────────────────────── */
 .bw-section-heading {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -276,7 +284,7 @@ p, li, span, div {
     margin-bottom: 0.8rem;
 }
 .bw-mode-card h3 {
-    font-family: 'Inter Tight', sans-serif;
+    font-family: var(--font-tight);
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--navy) !important;
@@ -300,11 +308,11 @@ p, li, span, div {
     line-height: 1.75;
     font-size: 0.97rem;
     color: var(--text-dark) !important;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
     box-shadow: var(--shadow-sm);
 }
 .bw-answer-label {
-    font-family: 'Inter Tight', sans-serif;
+    font-family: var(--font-tight);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -326,7 +334,7 @@ p, li, span, div {
     color: var(--text-dark) !important;
 }
 .bw-citation-box .cit-header {
-    font-family: 'Inter Tight', sans-serif;
+    font-family: var(--font-tight);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -358,7 +366,7 @@ p, li, span, div {
     padding: 0.8rem 1.2rem;
     margin: 0.5rem 0;
     font-size: 0.91em;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 .bw-flag-conflict {
     background: #FFF5F5 !important;
@@ -369,7 +377,7 @@ p, li, span, div {
     padding: 0.8rem 1.2rem;
     margin: 0.5rem 0;
     font-size: 0.91em;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 .bw-abstain-box {
     background: #F7F8FA !important;
@@ -380,7 +388,7 @@ p, li, span, div {
     padding: 0.8rem 1.2rem;
     margin: 0.5rem 0;
     font-size: 0.94em;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 
 /* ── Status pills ─────────────────────────────────────────────────── */
@@ -393,7 +401,7 @@ p, li, span, div {
     padding: 0.7rem 1rem;
     margin: 0.3rem 0;
     font-size: 0.88em;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 .bw-status-warn {
     background: #FFFBEB !important;
@@ -404,7 +412,7 @@ p, li, span, div {
     padding: 0.7rem 1rem;
     margin: 0.3rem 0;
     font-size: 0.88em;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 .bw-status-err {
     background: #FFF5F5 !important;
@@ -415,7 +423,7 @@ p, li, span, div {
     padding: 0.7rem 1rem;
     margin: 0.3rem 0;
     font-size: 0.88em;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 
 /* ── Feedback boxes ───────────────────────────────────────────────── */
@@ -426,7 +434,7 @@ p, li, span, div {
     border-radius: var(--radius);
     padding: 1.2rem 1.4rem;
     margin: 0.8rem 0;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 .bw-success-msg {
     background: #F0FDF4 !important;
@@ -435,7 +443,7 @@ p, li, span, div {
     border-radius: var(--radius);
     padding: 0.8rem 1.2rem;
     margin: 0.8rem 0;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 
 /* ── Wizard review header ─────────────────────────────────────────── */
@@ -449,7 +457,7 @@ p, li, span, div {
 }
 .bw-wizard-header h2 {
     color: white !important;
-    font-family: 'Source Serif 4', serif;
+    font-family: var(--font-serif);
     font-size: 1.3rem;
     margin: 0 0 0.3rem;
 }
@@ -457,7 +465,7 @@ p, li, span, div {
     color: rgba(255,255,255,0.8) !important;
     font-size: 0.88rem;
     margin: 0;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 
 /* ── Wizard checklist items ───────────────────────────────────────── */
@@ -472,7 +480,7 @@ p, li, span, div {
     background: #EEF2F9 !important;
     color: var(--navy) !important;
     padding: 0.7rem 1rem;
-    font-family: 'Inter Tight', sans-serif;
+    font-family: var(--font-tight);
     font-size: 0.95rem;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -488,7 +496,7 @@ p, li, span, div {
     box-shadow: var(--shadow-sm);
 }
 [data-testid="stMetricLabel"] {
-    font-family: 'Inter', sans-serif !important;
+    font-family: var(--font-sans) !important;
     font-size: 0.8rem !important;
     color: var(--text-mid) !important;
     font-weight: 600 !important;
@@ -496,7 +504,7 @@ p, li, span, div {
     letter-spacing: 0.05em !important;
 }
 [data-testid="stMetricValue"] {
-    font-family: 'Inter Tight', sans-serif !important;
+    font-family: var(--font-tight) !important;
     font-size: 2rem !important;
     color: var(--navy) !important;
     font-weight: 700 !important;
@@ -507,7 +515,7 @@ p, li, span, div {
     background: var(--orange) !important;
     border: none !important;
     color: white !important;
-    font-family: 'Inter', sans-serif !important;
+    font-family: var(--font-sans) !important;
     font-weight: 600 !important;
     border-radius: var(--radius) !important;
     transition: background 0.15s, box-shadow 0.15s !important;
@@ -520,7 +528,7 @@ p, li, span, div {
     background: var(--white) !important;
     border: 1px solid var(--border) !important;
     color: var(--text-dark) !important;
-    font-family: 'Inter', sans-serif !important;
+    font-family: var(--font-sans) !important;
     font-weight: 500 !important;
     border-radius: var(--radius) !important;
 }
@@ -534,7 +542,7 @@ p, li, span, div {
 [data-testid="stTextInput"] input {
     border: 1px solid var(--border) !important;
     border-radius: var(--radius) !important;
-    font-family: 'Inter', sans-serif !important;
+    font-family: var(--font-sans) !important;
     font-size: 0.94rem !important;
     background: var(--white) !important;
     color: var(--text-dark) !important;
@@ -551,7 +559,7 @@ p, li, span, div {
 [data-testid="stSelectbox"] > div > div {
     border-color: var(--border) !important;
     border-radius: var(--radius) !important;
-    font-family: 'Inter', sans-serif !important;
+    font-family: var(--font-sans) !important;
 }
 
 /* ── Expander ─────────────────────────────────────────────────────── */
@@ -568,26 +576,26 @@ p, li, span, div {
     font-size: 0.82rem;
     padding: 1.5rem 0 0.5rem;
     border-top: 1px solid var(--border);
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
 }
 .bw-footer strong { color: var(--navy); }
 
 /* ── Page title override ──────────────────────────────────────────── */
 h1 {
-    font-family: 'Source Serif 4', serif !important;
+    font-family: var(--font-serif) !important;
     font-size: 1.85rem !important;
     font-weight: 700 !important;
     letter-spacing: -0.02em !important;
     color: var(--navy) !important;
 }
 h2 {
-    font-family: 'Source Serif 4', serif !important;
+    font-family: var(--font-serif) !important;
     font-size: 1.35rem !important;
     font-weight: 600 !important;
     color: var(--navy) !important;
 }
 h3 {
-    font-family: 'Inter Tight', sans-serif !important;
+    font-family: var(--font-tight) !important;
     font-size: 1.05rem !important;
     font-weight: 700 !important;
     color: var(--navy) !important;
@@ -627,7 +635,7 @@ def render_sidebar(active: str = "home"):
             f"text-align:center;"
             f"'>"
             f"<div style='"
-            f"font-family:Inter Tight,sans-serif;"
+            f"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;"
             f"font-size:1.1rem;"
             f"font-weight:700;"
             f"color:{NAVY};"
