@@ -31,6 +31,11 @@ USAGE
 from pathlib import Path
 import base64
 import streamlit as st
+try:
+    from PIL import Image as _PILImage
+    _PIL_AVAILABLE = True
+except ImportError:
+    _PIL_AVAILABLE = False
 
 # ── Color tokens ──────────────────────────────────────────────────────────────
 NAVY      = "#22427C"
@@ -43,26 +48,32 @@ TEXT_MID  = "#4A5568"
 BORDER    = "#DDE3EC"
 
 # ── Logo loader ───────────────────────────────────────────────────────────────
-def _get_logo_path() -> Path:
-    """Find the logo file relative to this module."""
-    # Works both locally and on Streamlit Cloud
-    candidates = [
-        # theme.py lives in utils/ — logo is in assets/ at repo root
-        Path(__file__).parent.parent / "assets" / "BrentwoodCrestLogo-BW.png",
-        # Or directly in utils/assets/
-        Path(__file__).parent / "assets" / "BrentwoodCrestLogo-BW.png",
-        # Or at repo root
-        Path(__file__).parent.parent / "BrentwoodCrestLogo-BW.png",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
+def _get_logo_path(color: bool = True) -> Path:
+    """
+    Find the City crest logo file relative to this module.
+    color=True  → BrentwoodCrestLogo-RGB.png  (color version, used everywhere)
+    color=False → BrentwoodCrestLogo-BW.png   (fallback)
+    """
+    name_rgb = "BrentwoodCrestLogo-RGB.png"
+    name_bw  = "BrentwoodCrestLogo-BW.png"
+    primary  = name_rgb if color else name_bw
+    fallback = name_bw  if color else name_rgb
+
+    for name in (primary, fallback):
+        candidates = [
+            Path(__file__).parent.parent / "assets" / name,
+            Path(__file__).parent / "assets" / name,
+            Path(__file__).parent.parent / name,
+        ]
+        for p in candidates:
+            if p.exists():
+                return p
     return None
 
 
-def _logo_b64() -> str:
-    """Return the BW logo as a base64 data URI, or empty string if not found."""
-    p = _get_logo_path()
+def _logo_b64(color: bool = True) -> str:
+    """Return the color crest logo as a base64 data URI, or empty string if not found."""
+    p = _get_logo_path(color=color)
     if p is None:
         return ""
     with open(p, "rb") as f:
@@ -70,10 +81,29 @@ def _logo_b64() -> str:
     return f"data:image/png;base64,{data}"
 
 
+
+def get_favicon():
+    """
+    Return the City crest as a PIL Image for use as set_page_config(page_icon=...).
+    Falls back to a string emoji if PIL or the logo file is unavailable.
+    """
+    if not _PIL_AVAILABLE:
+        return "🏛"
+    p = _get_logo_path(color=True)
+    if p is None:
+        return "🏛"
+    try:
+        img = _PILImage.open(p)
+        img.thumbnail((64, 64), _PILImage.LANCZOS)
+        return img
+    except Exception:
+        return "🏛"
+
+
 # ── Master CSS ────────────────────────────────────────────────────────────────
 _CSS = """
 /* ── Google Fonts ─────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=Libre+Baskerville:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700&display=swap');
 
 /* ── Root tokens ──────────────────────────────────────────────────── */
 :root {
@@ -93,8 +123,13 @@ _CSS = """
 /* ── Page background ──────────────────────────────────────────────── */
 .stApp {
     background-color: var(--bg) !important;
-    font-family: 'Barlow', sans-serif !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
     color: var(--text-dark) !important;
+}
+p, li, span, div {
+    font-family: 'Inter', sans-serif;
 }
 
 /* ── Hide default Streamlit nav ───────────────────────────────────── */
@@ -118,7 +153,7 @@ _CSS = """
     padding: 0.6rem 1rem;
     border-radius: var(--radius);
     color: var(--text-mid) !important;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.92rem;
     font-weight: 500;
     text-decoration: none;
@@ -148,7 +183,7 @@ _CSS = """
     text-transform: uppercase;
     color: var(--text-mid);
     padding: 0.8rem 1rem 0.3rem;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .bw-nav-divider {
     border: none;
@@ -159,7 +194,7 @@ _CSS = """
     font-size: 0.75rem;
     color: var(--text-mid);
     padding: 0.4rem 1rem 1rem;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 /* ── Page header band ─────────────────────────────────────────────── */
@@ -173,30 +208,34 @@ _CSS = """
     gap: 1.2rem;
 }
 .bw-page-header h1 {
-    font-family: 'Libre Baskerville', serif;
-    font-size: 1.6rem;
+    font-family: 'Source Serif 4', serif;
+    font-size: 1.75rem;
+    font-weight: 700;
     color: var(--white) !important;
     margin: 0;
     line-height: 1.2;
+    letter-spacing: -0.01em;
 }
 .bw-page-header .subtitle {
-    font-family: 'Barlow', sans-serif;
-    font-size: 0.88rem;
-    color: rgba(255,255,255,0.75);
-    margin: 0.2rem 0 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.93rem;
+    font-weight: 400;
+    color: rgba(255,255,255,0.8);
+    margin: 0.3rem 0 0;
+    letter-spacing: 0.01em;
 }
 
 /* ── Section heading style ────────────────────────────────────────── */
 .bw-section-heading {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 0.78rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--midblue);
     border-bottom: 2px solid var(--border);
-    padding-bottom: 0.4rem;
-    margin: 1.5rem 0 0.8rem;
+    padding-bottom: 0.5rem;
+    margin: 1.8rem 0 1rem;
 }
 
 /* ── Cards ────────────────────────────────────────────────────────── */
@@ -236,7 +275,7 @@ _CSS = """
     margin-bottom: 0.8rem;
 }
 .bw-mode-card h3 {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Inter Tight', sans-serif;
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--navy) !important;
@@ -260,11 +299,11 @@ _CSS = """
     line-height: 1.75;
     font-size: 0.97rem;
     color: var(--text-dark) !important;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
     box-shadow: var(--shadow-sm);
 }
 .bw-answer-label {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Inter Tight', sans-serif;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -286,7 +325,7 @@ _CSS = """
     color: var(--text-dark) !important;
 }
 .bw-citation-box .cit-header {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Inter Tight', sans-serif;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -318,7 +357,7 @@ _CSS = """
     padding: 0.8rem 1.2rem;
     margin: 0.5rem 0;
     font-size: 0.91em;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .bw-flag-conflict {
     background: #FFF5F5 !important;
@@ -329,7 +368,7 @@ _CSS = """
     padding: 0.8rem 1.2rem;
     margin: 0.5rem 0;
     font-size: 0.91em;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .bw-abstain-box {
     background: #F7F8FA !important;
@@ -340,7 +379,7 @@ _CSS = """
     padding: 0.8rem 1.2rem;
     margin: 0.5rem 0;
     font-size: 0.94em;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 /* ── Status pills ─────────────────────────────────────────────────── */
@@ -353,7 +392,7 @@ _CSS = """
     padding: 0.7rem 1rem;
     margin: 0.3rem 0;
     font-size: 0.88em;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .bw-status-warn {
     background: #FFFBEB !important;
@@ -364,7 +403,7 @@ _CSS = """
     padding: 0.7rem 1rem;
     margin: 0.3rem 0;
     font-size: 0.88em;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .bw-status-err {
     background: #FFF5F5 !important;
@@ -375,7 +414,7 @@ _CSS = """
     padding: 0.7rem 1rem;
     margin: 0.3rem 0;
     font-size: 0.88em;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 /* ── Feedback boxes ───────────────────────────────────────────────── */
@@ -386,7 +425,7 @@ _CSS = """
     border-radius: var(--radius);
     padding: 1.2rem 1.4rem;
     margin: 0.8rem 0;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .bw-success-msg {
     background: #F0FDF4 !important;
@@ -395,7 +434,7 @@ _CSS = """
     border-radius: var(--radius);
     padding: 0.8rem 1.2rem;
     margin: 0.8rem 0;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 /* ── Wizard review header ─────────────────────────────────────────── */
@@ -409,7 +448,7 @@ _CSS = """
 }
 .bw-wizard-header h2 {
     color: white !important;
-    font-family: 'Libre Baskerville', serif;
+    font-family: 'Source Serif 4', serif;
     font-size: 1.3rem;
     margin: 0 0 0.3rem;
 }
@@ -417,7 +456,7 @@ _CSS = """
     color: rgba(255,255,255,0.8) !important;
     font-size: 0.88rem;
     margin: 0;
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 /* ── Wizard checklist items ───────────────────────────────────────── */
@@ -432,7 +471,7 @@ _CSS = """
     background: #EEF2F9 !important;
     color: var(--navy) !important;
     padding: 0.7rem 1rem;
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Inter Tight', sans-serif;
     font-size: 0.95rem;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -448,7 +487,7 @@ _CSS = """
     box-shadow: var(--shadow-sm);
 }
 [data-testid="stMetricLabel"] {
-    font-family: 'Barlow', sans-serif !important;
+    font-family: 'Inter', sans-serif !important;
     font-size: 0.8rem !important;
     color: var(--text-mid) !important;
     font-weight: 600 !important;
@@ -456,7 +495,7 @@ _CSS = """
     letter-spacing: 0.05em !important;
 }
 [data-testid="stMetricValue"] {
-    font-family: 'Barlow Condensed', sans-serif !important;
+    font-family: 'Inter Tight', sans-serif !important;
     font-size: 2rem !important;
     color: var(--navy) !important;
     font-weight: 700 !important;
@@ -467,7 +506,7 @@ _CSS = """
     background: var(--orange) !important;
     border: none !important;
     color: white !important;
-    font-family: 'Barlow', sans-serif !important;
+    font-family: 'Inter', sans-serif !important;
     font-weight: 600 !important;
     border-radius: var(--radius) !important;
     transition: background 0.15s, box-shadow 0.15s !important;
@@ -480,7 +519,7 @@ _CSS = """
     background: var(--white) !important;
     border: 1px solid var(--border) !important;
     color: var(--text-dark) !important;
-    font-family: 'Barlow', sans-serif !important;
+    font-family: 'Inter', sans-serif !important;
     font-weight: 500 !important;
     border-radius: var(--radius) !important;
 }
@@ -494,7 +533,7 @@ _CSS = """
 [data-testid="stTextInput"] input {
     border: 1px solid var(--border) !important;
     border-radius: var(--radius) !important;
-    font-family: 'Barlow', sans-serif !important;
+    font-family: 'Inter', sans-serif !important;
     font-size: 0.94rem !important;
     background: var(--white) !important;
     color: var(--text-dark) !important;
@@ -511,7 +550,7 @@ _CSS = """
 [data-testid="stSelectbox"] > div > div {
     border-color: var(--border) !important;
     border-radius: var(--radius) !important;
-    font-family: 'Barlow', sans-serif !important;
+    font-family: 'Inter', sans-serif !important;
 }
 
 /* ── Expander ─────────────────────────────────────────────────────── */
@@ -528,19 +567,30 @@ _CSS = """
     font-size: 0.82rem;
     padding: 1.5rem 0 0.5rem;
     border-top: 1px solid var(--border);
-    font-family: 'Barlow', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .bw-footer strong { color: var(--navy); }
 
 /* ── Page title override ──────────────────────────────────────────── */
 h1 {
-    font-family: 'Libre Baskerville', serif !important;
+    font-family: 'Source Serif 4', serif !important;
+    font-size: 1.85rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
     color: var(--navy) !important;
 }
-h2, h3 {
-    font-family: 'Barlow Condensed', sans-serif !important;
+h2 {
+    font-family: 'Source Serif 4', serif !important;
+    font-size: 1.35rem !important;
+    font-weight: 600 !important;
     color: var(--navy) !important;
+}
+h3 {
+    font-family: 'Inter Tight', sans-serif !important;
+    font-size: 1.05rem !important;
     font-weight: 700 !important;
+    color: var(--navy) !important;
+    letter-spacing: 0.01em !important;
 }
 
 /* ── Dividers ─────────────────────────────────────────────────────── */
@@ -568,25 +618,33 @@ def render_sidebar(active: str = "home"):
     ARGS:
         active: "home" | "qa" | "wizard"
     """
-    logo_path = _get_logo_path()
-
     with st.sidebar:
-        # ── Crest + title ───────────────────────────────────────────────
-        st.markdown("<div style='padding: 1.2rem 1rem 0.6rem;'>", unsafe_allow_html=True)
-        if logo_path:
-            st.image(str(logo_path), width=54)
+        # ── Color crest — fills full sidebar width ──────────────────────
+        logo_path_rgb = _get_logo_path(color=True)
+        if logo_path_rgb:
+            st.image(str(logo_path_rgb), use_container_width=True)
+
+        # ── Department title beneath logo ────────────────────────────────
         st.markdown(
-            "<div style='"
-            "font-family:Barlow Condensed,sans-serif;"
-            "font-size:1.05rem;font-weight:700;"
-            f"color:{NAVY};line-height:1.2;margin-top:0.4rem;"
-            "'>City of Brentwood<br>"
-            "<span style='font-weight:400;font-size:0.88rem;"
-            f"color:{TEXT_MID};'>Engineering Department</span>"
-            "</div>",
+            f"<div style='"
+            f"padding:0.6rem 1rem 0;"
+            f"font-family:Inter Tight,sans-serif;"
+            f"font-size:1.2rem;"
+            f"font-weight:700;"
+            f"color:{NAVY};"
+            f"line-height:1.3;"
+            f"letter-spacing:0.01em;"
+            f"'>City of Brentwood</div>"
+            f"<div style='"
+            f"padding:0.15rem 1rem 0.6rem;"
+            f"font-family:Inter,sans-serif;"
+            f"font-size:0.97rem;"
+            f"font-weight:500;"
+            f"color:{MID_BLUE};"
+            f"letter-spacing:0.02em;"
+            f"'>Engineering Department</div>",
             unsafe_allow_html=True,
         )
-        st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("<hr class='bw-nav-divider'>", unsafe_allow_html=True)
 
         # ── Nav links ───────────────────────────────────────────────────
@@ -622,29 +680,34 @@ def _nav_link(page: str, label: str, is_active: bool, icon: str = ""):
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def page_header(title: str, subtitle: str = "", icon_html: str = ""):
+def page_header(title: str, subtitle: str = ""):
     """
-    Render the standard Brentwood navy page header band.
+    Render the standard Brentwood navy page header band with color crest logo.
 
     ARGS:
-        title:      Main title text (serif font)
-        subtitle:   Smaller subtitle line beneath
-        icon_html:  Optional SVG or emoji for the left icon slot
+        title:    Main page title (serif font)
+        subtitle: Smaller subtitle line beneath
     """
-    icon_block = (
-        f"<div style='flex-shrink:0;width:44px;height:44px;"
-        f"background:rgba(255,255,255,0.15);border-radius:8px;"
-        f"display:flex;align-items:center;justify-content:center;"
-        f"font-size:1.5rem;'>{icon_html}</div>"
-    ) if icon_html else ""
+    logo_uri = _logo_b64(color=True)
+
+    logo_block = (
+        f"<img src='{logo_uri}' style='"
+        f"height:64px;width:auto;flex-shrink:0;"
+        f"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));'"
+        f" alt='City of Brentwood Seal'>"
+    ) if logo_uri else ""
+
+    sub_block = (
+        f"<p class='subtitle'>{subtitle}</p>"
+    ) if subtitle else ""
 
     st.markdown(
         f"""
         <div class="bw-page-header">
-            {icon_block}
+            {logo_block}
             <div>
                 <h1>{title}</h1>
-                {"<p class='subtitle'>"+subtitle+"</p>" if subtitle else ""}
+                {sub_block}
             </div>
         </div>
         """,
