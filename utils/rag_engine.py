@@ -782,6 +782,16 @@ CITATION NUMBERS ASSIGNED TO THE ABOVE SOURCES:
 QUESTION: {question}
 {discrepancy_instruction}
 
+IMPORTANT — HOW TO READ MUNICIPAL CODE CONTEXT:
+Municipal code text uses numbered list formatting like:
+  "(1) Minimum required lot area, one acre. (2) Maximum lot coverage by all
+   buildings, 25 percent. (3) Minimum required lot width at building line, 125 feet."
+Each numbered item IS a specific policy requirement. Read ALL numbered items in
+every context block — they contain the exact dimensional standards, measurements,
+and requirements you must use to answer the question. Do not skip or overlook
+numbered items. If a context block contains numbered items that directly answer
+the question, you MUST use them — do not abstain.
+
 ANSWER REQUIREMENTS:
 1. Start with a direct, specific answer in the first sentence.
 2. Use superscript numbers (¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸) inline to cite your sources.
@@ -798,7 +808,10 @@ ANSWER REQUIREMENTS:
 5. If a table or list of values is relevant, present it clearly.
 6. Do not use markdown formatting (no **, no ##, no ---).
 7. Do not include information that is not in the provided context.
-8. If the context does not contain enough information to answer the question,
+8. Only use ABSTAIN if — after carefully reading every numbered item in every
+   context block — the information genuinely does not exist in the provided
+   context. Never abstain when numbered list items directly answer the question.
+   If the context does not contain enough information to answer the question,
    respond with exactly: "ABSTAIN: The provided documents do not contain
    sufficient information to answer this question. Please consult the
    Engineering Manual directly or contact the City Engineer."
