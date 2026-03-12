@@ -47,9 +47,12 @@ def _get_logo_path() -> Path:
     """Find the logo file relative to this module."""
     # Works both locally and on Streamlit Cloud
     candidates = [
-        Path(__file__).parent / "assets" / "BrentwoodCrestLogo-BW.png",
-        Path(__file__).parent / "BrentwoodCrestLogo-BW.png",
+        # theme.py lives in utils/ — logo is in assets/ at repo root
         Path(__file__).parent.parent / "assets" / "BrentwoodCrestLogo-BW.png",
+        # Or directly in utils/assets/
+        Path(__file__).parent / "assets" / "BrentwoodCrestLogo-BW.png",
+        # Or at repo root
+        Path(__file__).parent.parent / "BrentwoodCrestLogo-BW.png",
     ]
     for p in candidates:
         if p.exists():
@@ -610,8 +613,9 @@ def _nav_link(page: str, label: str, is_active: bool, icon: str = ""):
     # Use Streamlit's page_link but wrap it in styled container
     css_class = "bw-nav-link active" if is_active else "bw-nav-link"
     # We use page_link for actual routing; style it via CSS class override
+    active_class = "active" if is_active else ""
     st.markdown(
-        f"<div class='nav-item-wrap {\"active\" if is_active else \"\"}'>",
+        f"<div class='nav-item-wrap {active_class}'>",
         unsafe_allow_html=True,
     )
     st.page_link(page, label=f"{icon}  {label}")
