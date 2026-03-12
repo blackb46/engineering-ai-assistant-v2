@@ -59,6 +59,9 @@ from chromadb.utils import embedding_functions
 
 # Model used for generating answers.
 # Must match Anthropic's current model string exactly.
+# Verified working in production as of March 2026.
+# If the API returns a model-not-found error, check Anthropic's model list at:
+#   https://docs.anthropic.com/en/docs/about-claude/models
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 
 # ChromaDB collection name — must match what build_corpus.py created.
