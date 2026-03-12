@@ -120,6 +120,15 @@ def main():
     _init_session_state()
 
     # ── Load engine ───────────────────────────────────────────────────────
+    # get_rag_engine() is decorated with @st.cache_resource in rag_engine.py.
+    # This means it runs once per server process and returns the cached engine
+    # on every subsequent call — including when this page rerenders after a
+    # button click. No spinner needed here: app.py already warmed the cache
+    # on first load. Calling it again is instant (cache hit).
+    #
+    # DO NOT wrap this in st.spinner or call load_database() separately here —
+    # that was the old pattern that caused the SessionInfo race condition and
+    # required multiple button clicks before the page responded.
     db_info = load_database()
     if not db_info["success"]:
         st.error(f"Database not available: {db_info['error']}")
@@ -127,8 +136,7 @@ def main():
             st.switch_page("app.py")
         return
 
-    with st.spinner("Loading AI engine — first startup may take up to 60 seconds..."):
-        engine = get_rag_engine(db_info["local_path"])
+    engine = get_rag_engine(db_info["local_path"])
     if not engine.is_ready():
         st.error(f"RAG engine not ready: {engine.get_init_error() or 'Unknown error'}")
         if st.button("Return to Dashboard"):
