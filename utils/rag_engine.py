@@ -312,6 +312,11 @@ class RAGEngine:
                     self._parse_discrepancy_from_answer(raw_answer)
                 )
 
+            # Step 6b: Filter citation list to only sources actually cited
+            # in the answer text — removes irrelevant retrieved chunks from
+            # the displayed source list.
+            citations = self._filter_cited_sources(raw_answer, citations)
+
             # Step 7: Check if Claude abstained (couldn't find the answer)
             abstained = self._check_abstention(raw_answer)
 
@@ -713,6 +718,10 @@ ANSWER REQUIREMENTS:
 1. Start with a direct, specific answer in the first sentence.
 2. Use superscript numbers (¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸) inline to cite your sources.
    Example: "The minimum buffer width is 50 feet.¹ Perennial streams require 75 feet.²"
+   CRITICAL: Only cite sources you actually use in your answer. Do not cite a
+   source number unless that source directly supports the statement it follows.
+   It is perfectly acceptable to use only 1-3 citation numbers if only 1-3
+   sources are relevant. Do not cite sources just because they were provided.
 3. Include specific numbers, measurements, and requirements from the sources.
 4. CRITICAL: You must synthesize ALL provided context blocks. Do not stop after
    the first source that partially answers the question. If multiple context blocks
@@ -742,6 +751,55 @@ Write your answer now:"""
         }
 
         return answer_text, token_usage
+
+    def _filter_cited_sources(self, answer: str, citations: list) -> list:
+        """
+        Filter the citation list to only include sources that were actually
+        cited (referenced by superscript number) in the answer text.
+
+        WHY THIS MATTERS:
+            The retriever pulls up to 12 chunks for context, but Claude may
+            only use 2-3 of them in its answer. Showing all 12 as "sources"
+            is misleading — it implies the answer draws from all of them,
+            which violates the zero-hallucination / full-accountability goal.
+
+        HOW IT WORKS:
+            Superscript unicode characters ¹²³⁴⁵⁶⁷⁸⁹ correspond to
+            citation numbers 1-9. This method finds every superscript in
+            the answer, collects the corresponding citation numbers, and
+            returns only those citation dicts.
+
+            If Claude cited ¹ ² ⁶ in an answer with 9 available sources,
+            only citations 1, 2, and 6 are returned — and they keep their
+            original numbers (no renumbering) so the superscripts still
+            match in the displayed answer.
+
+        ARGS:
+            answer (str):      The answer text with inline superscripts
+            citations (list):  Full citation list from _build_citations()
+
+        RETURNS:
+            Filtered list containing only cited sources, in original order.
+        """
+        # Map each superscript character to its integer citation number
+        SUPERSCRIPT_MAP = {
+            '¹': 1, '²': 2, '³': 3, '⁴': 4, '⁵': 5,
+            '⁶': 6, '⁷': 7, '⁸': 8, '⁹': 9, '⁰': 10,
+        }
+
+        # Find all superscript numbers used in the answer
+        used_numbers = set()
+        for char, num in SUPERSCRIPT_MAP.items():
+            if char in answer:
+                used_numbers.add(num)
+
+        if not used_numbers:
+            # Claude wrote an answer with no citations at all —
+            # return all citations so the source list isn't empty
+            return citations
+
+        # Return only citations whose number appears in the answer
+        return [c for c in citations if c["number"] in used_numbers]
 
     # ── Helper Methods ────────────────────────────────────────────────────
 
