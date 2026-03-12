@@ -43,7 +43,7 @@ st.set_page_config(page_title="Wizard Mode — Brentwood Engineering AI",
 apply_theme()
 render_sidebar(active="wizard")
 
-# Extra CSS for wizard-specific elements (dark-mode safe)
+# Extra CSS for wizard-specific elements — fonts match Brentwood theme (Inter / Inter Tight)
 st.markdown("""
 <style>
     .bw-section-header {
@@ -52,7 +52,7 @@ st.markdown("""
         padding: 0.65rem 1rem;
         border-left: 4px solid #F07138;
         margin: 1.2rem 0 0.5rem 0;
-        font-family: 'Barlow Condensed', sans-serif;
+        font-family: 'Inter Tight', sans-serif;
         font-size: 0.97rem;
         font-weight: 700;
         letter-spacing: 0.02em;
@@ -65,7 +65,7 @@ st.markdown("""
         border-radius: 6px;
         padding: 0.7rem 1rem;
         margin: 0.4rem 0;
-        font-family: 'Barlow', sans-serif;
+        font-family: 'Inter', sans-serif;
     }
     .bw-comment-box {
         background: #FFFBF0 !important;
@@ -76,7 +76,7 @@ st.markdown("""
         padding: 0.75rem 1rem;
         margin: 0.4rem 0 0.4rem 1.5rem;
         font-size: 0.9em;
-        font-family: 'Barlow', sans-serif;
+        font-family: 'Inter', sans-serif;
     }
     .bw-resubmittal-box {
         background: #EEF2F9 !important;
@@ -85,7 +85,7 @@ st.markdown("""
         border-radius: 8px;
         padding: 1rem 1.2rem;
         margin: 1rem 0;
-        font-family: 'Barlow', sans-serif;
+        font-family: 'Inter', sans-serif;
     }
     .bw-export-section {
         background: #F0FDF4 !important;
@@ -95,7 +95,7 @@ st.markdown("""
         border-radius: 8px;
         padding: 1rem 1.2rem;
         margin: 1rem 0;
-        font-family: 'Barlow', sans-serif;
+        font-family: 'Inter', sans-serif;
     }
     .status-yes { color: #16A34A !important; font-weight: 700; }
     .status-no  { color: #DC2626 !important; font-weight: 700; }
@@ -653,7 +653,7 @@ def main():
                     
                     st.markdown('</div>', unsafe_allow_html=True)
             
-            st.markdown("---")
+            st.markdown("<hr>", unsafe_allow_html=True)
     
     # =========================================================================
     # STANDALONE RESUBMITTAL QUESTION
@@ -686,8 +686,8 @@ def main():
     # =========================================================================
     # STEP 3: REVIEW SUMMARY & EXPORT
     # =========================================================================
-    st.markdown("---")
-    st.subheader("📊 Step 3: Review Summary & Export")
+    st.markdown("<hr>", unsafe_allow_html=True)
+    section_heading("Step 3 — Review Summary & Export")
     
     yes_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "Yes")
     no_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "No")
@@ -708,7 +708,7 @@ def main():
     
     # Export section
     st.markdown('<div class="bw-export-section">', unsafe_allow_html=True)
-    st.markdown("### 📤 Export Review")
+    section_heading("Export Review")
     
     if not has_comments and (yes_count + na_count) > 0:
         st.success("✅ No issues found! All reviewed items are compliant.")
@@ -754,7 +754,8 @@ def main():
 
     # Row 2: LAMA CSV + Bluebeam BAX (shown when there are any comments)
     if has_comments:
-        st.markdown("#### 📊 Extract Comments")
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+        section_heading("Extract Comments")
 
         permit_num = st.session_state.wizard_permit_number or "review"
         datestamp = datetime.now().strftime('%Y%m%d')
@@ -789,8 +790,8 @@ def main():
     
     # Quick copy section for comments
     if has_comments:
-        st.markdown("---")
-        st.subheader("📋 Quick Copy - All Comments")
+        st.markdown("<hr>", unsafe_allow_html=True)
+        section_heading("Quick Copy — All Comments")
         st.caption("Copy these comments directly into Bluebeam or your permit system:")
         
         all_comments = []
@@ -825,17 +826,14 @@ def main():
                 label_visibility="collapsed"
             )
     
-    # Navigation
-    st.markdown("---")
+    # ── Bottom navigation ──────────────────────────────────────────────────────
+    st.markdown("<hr>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🏠 Home"):
+        if st.button("← Dashboard", use_container_width=True):
             st.switch_page("app.py")
     with col2:
-        if st.button("💬 Q&A Mode"):
+        if st.button("Q&A Mode →", use_container_width=True):
             st.switch_page("pages/1_QA_Mode.py")
 
-
-if __name__ == "__main__":
-    main()
     footer()
