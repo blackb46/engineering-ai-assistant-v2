@@ -1,33 +1,8 @@
 """
-==============================================================================
-WIZARD MODE - Interactive Plan Review Checklist
-==============================================================================
-File: pages/2_Wizard_Mode.py
-Purpose: Guide reviewers through plan review with interactive checklists
-         and automatic comment generation.
-
-Features:
-- Review type selection (Transitional, HP, Standard, Pool, Fence)
-- Interactive Yes/No/N/A radio buttons per checklist item
-- Automatic comment suggestions when "No" is selected
-- Custom notes support
-- Standalone resubmittal question before export (appends BB-0045 to end)
-- Word document export with full checklist and comments
-- LAMA CSV export for LAMA Comment Uploader chrome extension
-- Bluebeam BAX export with full styling (green text boxes, Helvetica 12pt)
-
-Update Log:
-- 2026-02-02: Added explicit text colors and !important to all CSS classes
-              to fix invisible text when browser is in dark mode.
-- 2026-02-02: Added custom sidebar navigation to replace default "app" label.
-- 2026-02-02: Added LAMA CSV and Bluebeam BAX export buttons.
-- 2026-02-02: Changed status dropdowns to horizontal radio buttons for speed.
-- 2026-02-02: Switched to BAX (Bluebeam Markup Archive) format with full
-              annotation styling in the Raw field.
-- 2026-02-02: Removed item 0.5 from checklist; added standalone resubmittal
-              question before Step 3. BB-0045 appended to end of comments
-              when "Yes" is selected.
-==============================================================================
+2_Wizard_Mode.py
+================
+City of Brentwood Engineering AI Assistant - V2
+Wizard Mode — interactive plan review checklist with export.
 """
 
 import streamlit as st
@@ -40,18 +15,17 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO, StringIO
 
-# Add utils to path
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
 
 from checklist_data import (
-    REVIEW_TYPES, 
-    REVIEWERS, 
+    REVIEW_TYPES,
+    REVIEWERS,
     CHECKLIST_SECTIONS,
     get_checklist_for_review_type
 )
 from comments_database import COMMENTS, get_comment
+from theme import apply_theme, render_sidebar, page_header, section_heading, footer
 
-# Import python-docx for Word export
 try:
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
@@ -61,85 +35,72 @@ try:
 except ImportError:
     DOCX_AVAILABLE = False
 
-st.set_page_config(page_title="Wizard Mode", page_icon="📋", layout="wide")
+st.set_page_config(page_title="Wizard Mode — Brentwood Engineering AI",
+                   page_icon="📋", layout="wide")
 
-# =============================================================================
-# CUSTOM CSS - Dark Mode Safe
-# =============================================================================
+apply_theme()
+render_sidebar(active="wizard")
+
+# Extra CSS for wizard-specific elements (dark-mode safe)
 st.markdown("""
 <style>
-    /* Hide default streamlit page navigation */
-    [data-testid="stSidebarNav"] {
-        display: none;
+    .bw-section-header {
+        background: #EEF2F9 !important;
+        color: #22427C !important;
+        padding: 0.65rem 1rem;
+        border-left: 4px solid #F07138;
+        margin: 1.2rem 0 0.5rem 0;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 0.97rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        border-radius: 0 6px 6px 0;
     }
-    .review-header {
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%) !important;
-        color: white !important;
-        padding: 1.5rem;
-        border-radius: 10px;
-        margin-bottom: 1rem;
+    .bw-checklist-item {
+        background: #FFFFFF !important;
+        color: #1A2332 !important;
+        border: 1px solid #DDE3EC;
+        border-radius: 6px;
+        padding: 0.7rem 1rem;
+        margin: 0.4rem 0;
+        font-family: 'Barlow', sans-serif;
     }
-    .section-header {
-        background: #f0f4f8 !important;
-        color: #1a1a2e !important;
+    .bw-comment-box {
+        background: #FFFBF0 !important;
+        color: #1A2332 !important;
+        border: 1px solid #F6D860;
+        border-left: 3px solid #E8A000;
+        border-radius: 6px;
         padding: 0.75rem 1rem;
-        border-left: 4px solid #1e3a5f;
-        margin: 1rem 0 0.5rem 0;
-        font-weight: bold;
-    }
-    .checklist-item {
-        background: #ffffff !important;
-        color: #1a1a2e !important;
-        border: 1px solid #e0e0e0;
-        border-radius: 5px;
-        padding: 0.75rem;
-        margin: 0.5rem 0;
-    }
-    .comment-box {
-        background: #fff8e1 !important;
-        color: #1a1a2e !important;
-        border: 1px solid #ffd54f;
-        border-radius: 5px;
-        padding: 0.75rem;
-        margin: 0.5rem 0 0.5rem 1rem;
+        margin: 0.4rem 0 0.4rem 1.5rem;
         font-size: 0.9em;
+        font-family: 'Barlow', sans-serif;
     }
-    .status-yes { color: #2e7d32 !important; font-weight: bold; }
-    .status-no { color: #c62828 !important; font-weight: bold; }
-    .status-na { color: #757575 !important; font-weight: bold; }
-    .export-section {
-        background: #e8f5e9 !important;
-        color: #1a1a2e !important;
-        border: 1px solid #a5d6a7;
+    .bw-resubmittal-box {
+        background: #EEF2F9 !important;
+        color: #1A2332 !important;
+        border: 2px solid #2F5C9C;
         border-radius: 8px;
-        padding: 1rem;
+        padding: 1rem 1.2rem;
         margin: 1rem 0;
+        font-family: 'Barlow', sans-serif;
     }
-    .resubmittal-box {
-        background: #e3f2fd !important;
-        color: #1a1a2e !important;
-        border: 2px solid #1976d2;
+    .bw-export-section {
+        background: #F0FDF4 !important;
+        color: #1A2332 !important;
+        border: 1px solid #BBF7D0;
+        border-left: 4px solid #16A34A;
         border-radius: 8px;
-        padding: 1rem;
+        padding: 1rem 1.2rem;
         margin: 1rem 0;
+        font-family: 'Barlow', sans-serif;
     }
-    /* Compact radio buttons - reduce vertical padding */
-    div[data-testid="stRadio"] > div {
-        gap: 0.5rem;
-    }
+    .status-yes { color: #16A34A !important; font-weight: 700; }
+    .status-no  { color: #DC2626 !important; font-weight: 700; }
+    .status-na  { color: #64748B !important; font-weight: 700; }
+    div[data-testid="stRadio"] > div { gap: 0.5rem; }
 </style>
 """, unsafe_allow_html=True)
-
-# Custom Sidebar Navigation (matches app.py)
-st.sidebar.title("🧭 Navigation")
-st.sidebar.markdown("---")
-st.sidebar.page_link("app.py", label="🏡 Dashboard", icon=None)
-st.sidebar.page_link("pages/1_QA_Mode.py", label="💬 Q&A Mode", icon=None)
-st.sidebar.page_link("pages/2_Wizard_Mode.py", label="🧙‍♂️ Wizard Mode", icon=None)
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Engineering AI Assistant**")
-st.sidebar.markdown("v1.0 | Brentwood, TN")
-
 
 def initialize_session_state():
     """Initialize session state variables"""
@@ -546,15 +507,17 @@ def generate_bluebeam_bax():
 def main():
     """Main function for Wizard Mode"""
     initialize_session_state()
-    
-    st.title("📋 Engineering Review Wizard")
-    st.markdown("Interactive checklist for plan reviews with automatic comment generation.")
-    
+
+    page_header(
+        title="Engineering Review Wizard",
+        subtitle="Interactive plan review checklist with automatic comment generation",
+        icon_html="📋",
+    )
+
     # =========================================================================
     # STEP 1: PROJECT SETUP
     # =========================================================================
-    st.markdown("---")
-    st.subheader("📝 Step 1: Project Setup")
+    section_heading("Step 1 — Project Setup")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -598,14 +561,14 @@ def main():
         st.session_state.wizard_reviewer = reviewer if reviewer else None
     
     if not st.session_state.wizard_review_type:
-        st.info("👆 Select a review type to begin.")
+        st.markdown('<div class="bw-status-warn">Select a review type above to begin the checklist.</div>', unsafe_allow_html=True)
         return
     
     # =========================================================================
     # STEP 2: INTERACTIVE CHECKLIST
     # =========================================================================
-    st.markdown("---")
-    st.subheader(f"📋 Step 2: {st.session_state.wizard_review_type} Checklist")
+    st.markdown("<hr>", unsafe_allow_html=True)
+    section_heading(f"Step 2 — {st.session_state.wizard_review_type} Checklist")
     
     checklist = get_checklist_for_review_type(st.session_state.wizard_review_type)
     
@@ -617,7 +580,7 @@ def main():
     
     # Display checklist by section
     for section_id, section_data in checklist.items():
-        st.markdown(f'<div class="section-header">{section_data["name"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="bw-section-header">{section_data["name"]}</div>', unsafe_allow_html=True)
         
         for item in section_data["items"]:
             item_key = item["id"]
@@ -647,7 +610,7 @@ def main():
             # If "No" is selected, show comment options
             if st.session_state.wizard_checklist_state.get(item_key) == "No":
                 with st.container():
-                    st.markdown('<div class="comment-box">', unsafe_allow_html=True)
+                    st.markdown('<div class="bw-comment-box">', unsafe_allow_html=True)
                     st.markdown("**📝 Select applicable comments:**")
                     
                     comment_ids = item.get("comment_ids", [])
@@ -695,7 +658,7 @@ def main():
     # STANDALONE RESUBMITTAL QUESTION
     # Positioned between the checklist and Step 3, inside its own styled box
     # =========================================================================
-    st.markdown('<div class="resubmittal-box">', unsafe_allow_html=True)
+    st.markdown('<div class="bw-resubmittal-box">', unsafe_allow_html=True)
     
     resub_col1, resub_col2 = st.columns([3, 1])
     
@@ -743,7 +706,7 @@ def main():
         st.metric("📝 Total Reviewed", yes_count + no_count + na_count)
     
     # Export section
-    st.markdown('<div class="export-section">', unsafe_allow_html=True)
+    st.markdown('<div class="bw-export-section">', unsafe_allow_html=True)
     st.markdown("### 📤 Export Review")
     
     if not has_comments and (yes_count + na_count) > 0:
@@ -874,3 +837,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    footer()
