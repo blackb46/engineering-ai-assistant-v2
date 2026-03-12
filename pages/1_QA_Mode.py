@@ -17,12 +17,12 @@ from drive_loader  import load_database
 from rag_engine    import get_rag_engine
 from database      import AuditLogger
 from google_sheets import log_flagged_response
-from theme         import apply_theme, render_sidebar, page_header, section_heading, footer
+from theme         import apply_theme, render_sidebar, page_header, section_heading, footer, get_favicon
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Q&A Mode — Brentwood Engineering AI",
-    page_icon="🔍",
+    page_icon=get_favicon(),
     layout="wide",
 )
 
@@ -108,9 +108,8 @@ def _display_citations(citations: list):
 
 def main():
     page_header(
-        title="Engineering Q&A",
-        subtitle="Ask questions about Brentwood municipal engineering policy",
-        icon_html="🔍",
+        title="Engineering Questions and Answer Mode",
+        subtitle="Answers grounded in the Engineering Policy Manual and Brentwood Municipal Code",
     )
 
     _init_session_state()
