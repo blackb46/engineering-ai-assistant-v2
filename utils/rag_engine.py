@@ -306,7 +306,13 @@ class RAGEngine:
                 question, chunks, citations, discrepancy_flag
             )
 
-            # Step 6: Check if Claude abstained (couldn't find the answer)
+            # Step 6: Parse discrepancy signal Claude embedded in answer
+            if discrepancy_flag == "claude_will_decide":
+                discrepancy_flag, discrepancy_note, raw_answer = (
+                    self._parse_discrepancy_from_answer(raw_answer)
+                )
+
+            # Step 7: Check if Claude abstained (couldn't find the answer)
             abstained = self._check_abstention(raw_answer)
 
             elapsed = round(time.time() - start_time, 2)
@@ -441,77 +447,75 @@ class RAGEngine:
     def _detect_discrepancy(self, chunks: list) -> tuple:
         """
         Check whether the retrieved chunks contain both Municipal Code
-        content and Engineering Policy content that might conflict.
+        content and Engineering Policy content that actually conflict.
 
         LOGIC:
-            If chunks come from BOTH code sources AND policy sources,
-            we flag this for the engineer. The flag type is:
+            discrepancy detection is deferred to Claude during answer
+            generation. Claude reads both sources and returns a signal
+            in the first line of its answer:
 
-            "more_restrictive" — chunks appear additive (policy adds
-                requirements on top of code, which is common and expected)
+            DISCREPANCY:CONFLICT    — sources directly contradict
+            DISCREPANCY:RESTRICTIVE — policy adds stricter requirements
+            DISCREPANCY:NONE        — sources agree or are complementary
 
-            "conflict" — chunks appear to directly contradict each other
-                (rare but serious — deferred to City Engineer)
-
-            None — sources are consistent or only one source type
-
-        NOTE:
-            We intentionally err on the side of flagging. False positives
-            (unnecessary warnings) are far safer than missed conflicts
-            in a safety-critical engineering context.
+            This method returns a sentinel that tells _generate_answer
+            to ask Claude to make the determination, then _parse_discrepancy
+            reads Claude's actual answer to set the final flag.
 
         RETURNS:
-            (flag_type, note_text) where flag_type is "more_restrictive",
-            "conflict", or None.
+            ("claude_will_decide", None) when both source types present,
+            (None, None) when only one source type present.
         """
         code_chunks   = [c for c in chunks if c["content_type"] in CODE_CONTENT_TYPES]
         policy_chunks = [c for c in chunks if c["content_type"] in POLICY_CONTENT_TYPES]
 
         if not code_chunks or not policy_chunks:
-            # Only one source type — no discrepancy possible
             return None, None
 
-        # Both source types are present — flag it
-        # We use a simple heuristic: if the policy chunk explicitly references
-        # the same section number as a code chunk, the relationship is probably
-        # "more restrictive" (common). Otherwise flag as potential conflict.
+        # Both source types present — ask Claude to assess
+        return "claude_will_decide", None
 
-        code_section_numbers = {
-            c["section_number"] for c in code_chunks if c["section_number"]
-        }
-        policy_section_refs = " ".join(
-            c["text"] for c in policy_chunks
-        ).lower()
+    def _parse_discrepancy_from_answer(self, answer: str) -> tuple:
+        """
+        Read the discrepancy signal Claude embedded in its answer.
+        Called after _generate_answer returns.
 
-        # Check if any code section number appears in policy text
-        # (indicating the policy is referencing, not contradicting, the code)
-        cross_reference_found = any(
-            sec.lower().replace("_occ2", "").replace("_occ3", "")
-            in policy_section_refs
-            for sec in code_section_numbers
-            if sec
-        )
+        Claude is instructed to start its answer with one of:
+            DISCREPANCY:CONFLICT
+            DISCREPANCY:RESTRICTIVE
+            DISCREPANCY:NONE
+        followed by a newline, then the actual answer text.
 
-        if cross_reference_found:
-            # Policy is explicitly referencing the code section —
-            # likely "more restrictive" (additional requirements)
+        Returns (flag, note, cleaned_answer).
+        """
+        lines = answer.strip().split("\n", 1)
+        first_line = lines[0].strip()
+        rest = lines[1].strip() if len(lines) > 1 else answer
+
+        if first_line == "DISCREPANCY:CONFLICT":
+            note = (
+                "Sources from the Municipal Code and Engineering Policy Manual "
+                "appear to conflict on this topic. Do not rely on this response "
+                "alone. Defer to the City Engineer for binding interpretation."
+            )
+            return "conflict", note, rest
+
+        elif first_line == "DISCREPANCY:RESTRICTIVE":
             note = (
                 "The Engineering Policy Manual references requirements from the "
                 "Municipal Code. The Manual may impose stricter standards than "
                 "the Code alone. Both sets of requirements apply — follow the "
                 "more restrictive standard."
             )
-            return "more_restrictive", note
+            return "more_restrictive", note, rest
+
+        elif first_line == "DISCREPANCY:NONE":
+            return None, None, rest
+
         else:
-            # Both sources address the topic but without clear cross-reference —
-            # flag as potential conflict for engineer to review
-            note = (
-                "This question is addressed by both the Municipal Code and the "
-                "Engineering Policy Manual. The sources may conflict or address "
-                "different aspects of the same topic. Review both sources and "
-                "defer to the City Engineer for binding interpretation."
-            )
-            return "conflict", note
+            # Claude didn't return the expected signal — treat as no flag
+            # and return the full answer unchanged
+            return None, None, answer
 
     # ── Citation Building ─────────────────────────────────────────────────
 
@@ -678,18 +682,18 @@ class RAGEngine:
 
         # Build discrepancy instruction if needed
         discrepancy_instruction = ""
-        if discrepancy_flag == "more_restrictive":
+        if discrepancy_flag == "claude_will_decide":
             discrepancy_instruction = (
-                "\n\nIMPORTANT: Both Municipal Code and Engineering Policy Manual "
-                "sources are present. If the Manual imposes stricter requirements "
-                "than the Code, state both and note that the stricter standard applies."
-            )
-        elif discrepancy_flag == "conflict":
-            discrepancy_instruction = (
-                "\n\nIMPORTANT: Sources from both Municipal Code and Engineering "
-                "Policy Manual are present and may conflict. Present what each "
-                "source says separately. Do NOT resolve the conflict. State that "
-                "the engineer must verify with the City Engineer."
+                "\n\nDISCREPANCY ASSESSMENT REQUIRED: Both Municipal Code and "
+                "Engineering Policy Manual sources are present. Before writing "
+                "your answer, determine whether the sources agree, conflict, or "
+                "the policy adds stricter requirements than the code.\n"
+                "Start your entire response with EXACTLY one of these three lines "
+                "(nothing before it, nothing after it on that line):\n"
+                "  DISCREPANCY:NONE        (sources agree or are complementary)\n"
+                "  DISCREPANCY:RESTRICTIVE (policy adds stricter requirements)\n"
+                "  DISCREPANCY:CONFLICT    (sources directly contradict each other)\n"
+                "Then on the next line begin your answer normally."
             )
 
         prompt = f"""You are the City of Brentwood Engineering AI Assistant.
