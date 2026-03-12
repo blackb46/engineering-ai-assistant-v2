@@ -127,7 +127,8 @@ def main():
             st.switch_page("app.py")
         return
 
-    engine = get_rag_engine(db_info["local_path"])
+    with st.spinner("Loading AI engine — first startup may take up to 60 seconds..."):
+        engine = get_rag_engine(db_info["local_path"])
     if not engine.is_ready():
         st.error(f"RAG engine not ready: {engine.get_init_error() or 'Unknown error'}")
         if st.button("Return to Dashboard"):
