@@ -108,8 +108,8 @@ def _display_citations(citations: list):
 
 def main():
     page_header(
-        title="Engineering Questions and Answer Mode",
-        subtitle="Answers grounded in the Engineering Policy Manual and Brentwood Municipal Code",
+        title="Engineering Question and Answer Mode",
+        subtitle="Answers grounded in the Brentwood Municipal Code and Engineering Policy Manual",
     )
 
     _init_session_state()
