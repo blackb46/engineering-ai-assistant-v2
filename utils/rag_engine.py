@@ -410,7 +410,7 @@ class RAGEngine:
         global_results = self.collection.query(
             query_texts=[question],
             n_results=TOP_K_CHUNKS,
-            include=["documents", "metadatas", "distances", "ids"],
+            include=["documents", "metadatas", "distances"],
         )
         chunks.extend(_parse_results(global_results))
 
@@ -425,7 +425,7 @@ class RAGEngine:
                 query_texts=[question],
                 n_results=4,
                 where={"doc_id": {"$in": EPM_DOC_IDS}},
-                include=["documents", "metadatas", "distances", "ids"],
+                include=["documents", "metadatas", "distances"],
             )
             chunks.extend(_parse_results(epm_results, min_similarity=0.30))
         except Exception:
