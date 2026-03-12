@@ -71,15 +71,30 @@ def _get_logo_path(color: bool = True) -> Path:
     return None
 
 
+# Module-level cache for base64-encoded logos.
+# Populated once on first call, reused on every subsequent Streamlit rerender.
+# Without this, every button click / checkbox tick re-encodes the 300 KB PNG
+# and sends ~780 KB of HTML to the browser — the main cause of page sluggishness.
+_LOGO_CACHE: dict = {}
+
+
 def _logo_b64(color: bool = True) -> str:
-    """Return the color crest logo as a base64 data URI, or empty string if not found."""
+    """
+    Return the color crest logo as a base64 data URI, or empty string if not found.
+    Result is cached at module level so encoding happens once per server process.
+    """
+    key = "color" if color else "bw"
+    if key in _LOGO_CACHE:
+        return _LOGO_CACHE[key]
     p = _get_logo_path(color=color)
     if p is None:
+        _LOGO_CACHE[key] = ""
         return ""
     with open(p, "rb") as f:
         data = base64.b64encode(f.read()).decode()
-    return f"data:image/png;base64,{data}"
-
+    result = f"data:image/png;base64,{data}"
+    _LOGO_CACHE[key] = result
+    return result
 
 
 def get_favicon():
@@ -636,19 +651,19 @@ def render_sidebar(active: str = "home"):
             f"'>"
             f"<div style='"
             f"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;"
-            f"font-size:1.1rem;"
+            f"font-size:1.15rem;"
             f"font-weight:700;"
             f"color:{NAVY};"
             f"line-height:1.3;"
             f"letter-spacing:0.01em;"
             f"'>City of Brentwood</div>"
             f"<div style='"
-            f"font-family:Inter,sans-serif;"
-            f"font-size:0.88rem;"
-            f"font-weight:500;"
+            f"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;"
+            f"font-size:1.0rem;"
+            f"font-weight:600;"
             f"color:{MID_BLUE};"
             f"letter-spacing:0.02em;"
-            f"margin-top:0.15rem;"
+            f"margin-top:0.2rem;"
             f"'>Engineering Department</div>"
             f"</div>",
             unsafe_allow_html=True,
