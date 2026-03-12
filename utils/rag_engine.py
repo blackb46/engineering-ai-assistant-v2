@@ -376,15 +376,18 @@ class RAGEngine:
             parsed = []
             if not results["documents"] or not results["documents"][0]:
                 return parsed
-            for text, meta, distance in zip(
+            # ChromaDB stores the chunk_id as the record ID (not in metadata).
+            # We must read it from results["ids"], not from meta.get("chunk_id").
+            ids = results.get("ids", [[]])[0]
+            for i, (text, meta, distance) in enumerate(zip(
                 results["documents"][0],
                 results["metadatas"][0],
                 results["distances"][0],
-            ):
+            )):
                 similarity = max(0.0, 1.0 - (distance / 2.0))
                 if similarity < min_similarity:
                     continue
-                chunk_id = meta.get("chunk_id", "")
+                chunk_id = ids[i] if i < len(ids) else meta.get("chunk_id", f"chunk_{i}")
                 if chunk_id in seen_chunk_ids:
                     continue
                 seen_chunk_ids.add(chunk_id)
@@ -407,7 +410,7 @@ class RAGEngine:
         global_results = self.collection.query(
             query_texts=[question],
             n_results=TOP_K_CHUNKS,
-            include=["documents", "metadatas", "distances"],
+            include=["documents", "metadatas", "distances", "ids"],
         )
         chunks.extend(_parse_results(global_results))
 
@@ -422,7 +425,7 @@ class RAGEngine:
                 query_texts=[question],
                 n_results=4,
                 where={"doc_id": {"$in": EPM_DOC_IDS}},
-                include=["documents", "metadatas", "distances"],
+                include=["documents", "metadatas", "distances", "ids"],
             )
             chunks.extend(_parse_results(epm_results, min_similarity=0.30))
         except Exception:
