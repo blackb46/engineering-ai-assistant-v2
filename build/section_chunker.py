@@ -312,6 +312,14 @@ class SectionChunker:
     # Timestamp pattern — e.g. "(11/23/2015 9:12 AM MAW)"
     _TIMESTAMP_PATTERN = re.compile(r'^\(\d{1,2}/\d{1,2}/\d{4}')
 
+    # Math formula pattern — e.g. "R = A + B - (A × B) / 100"
+    # These appear in the EPM stormwater section as inline formulas.
+    # They pass isupper() because they contain no lowercase letters,
+    # but they are NOT section headings and must be excluded.
+    _MATH_FORMULA_PATTERN = re.compile(
+        r'[=+\-*/×÷]|\d+\s*[=+\-*/×÷]\s*\d+'
+    )
+
     def __init__(self):
         # Running state while processing a document
         self._current_article = ""
@@ -626,6 +634,7 @@ class SectionChunker:
             and len(text.strip()) > 3
             and not self._EPM_TITLE_EXCLUSIONS.match(text)
             and not self._TIMESTAMP_PATTERN.match(text)
+            and not self._MATH_FORMULA_PATTERN.search(text)
         )
 
         if is_heading1 or is_allcaps_heading:
