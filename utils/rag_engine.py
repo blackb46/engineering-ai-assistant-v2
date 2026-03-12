@@ -477,6 +477,40 @@ class RAGEngine:
             # If filtered query fails, continue with global results only
             pass
 
+        # ── Pass 3: Targeted Chapter 78 (Zoning) search ────────────────────
+        # Zoning questions (setbacks, lot size, height limits, permitted uses,
+        # district standards) often lose to other chapters in the global search
+        # because similar regulatory language appears across all chapters.
+        # A dedicated ch78 pass guarantees the correct zoning section is
+        # always included when a zoning question is asked.
+        #
+        # Example failure case without this pass:
+        #   Q: "What are the R-2 zoning technical standards?"
+        #   Global pass returns R-1 and arterial standards at higher scores
+        #   than the correct Sec. 78-164 — correct answer never reaches Claude.
+        ZONING_KEYWORDS = (
+            "zoning", "r-1", "r-2", "r-3", "r-4", "ar ", "ar-", "osrd",
+            "setback", "lot size", "lot area", "building height", "lot width",
+            "permitted use", "conditional use", "variance", "district",
+            "front yard", "rear yard", "side yard", "lot coverage",
+            "accessory building", "home occupation", "buffer strip",
+            "building envelope", "technical standard",
+        )
+        question_lower = question.lower()
+        is_zoning_question = any(kw in question_lower for kw in ZONING_KEYWORDS)
+
+        if is_zoning_question:
+            try:
+                ch78_results = self.collection.query(
+                    query_texts=[question],
+                    n_results=6,
+                    where={"doc_id": "ch78"},
+                    include=["documents", "metadatas", "distances"],
+                )
+                chunks.extend(_parse_results(ch78_results, min_similarity=0.30))
+            except Exception:
+                pass
+
         # Sort all chunks by similarity, best first
         chunks.sort(key=lambda c: c["similarity"], reverse=True)
         return chunks
