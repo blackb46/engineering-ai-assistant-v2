@@ -620,39 +620,43 @@ def render_sidebar(active: str = "home"):
         active: "home" | "qa" | "wizard"
     """
     with st.sidebar:
-        # ── Color crest — fixed 120px width, centered ────────────────────
-        # use_container_width=True made the logo span the full sidebar and
-        # appear oversized. 120px is roughly half that and looks proportional.
-        logo_b64_sidebar = _logo_b64(color=True)
-        if logo_b64_sidebar:
-            st.markdown(
-                f"<div style='display:flex;justify-content:center;padding:1rem 0 0.5rem;'>"
-                f"<img src='{logo_b64_sidebar}' style='width:120px;height:auto;' alt='City of Brentwood Seal'>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-
-        # ── Department title beneath logo ────────────────────────────────
+        # ── Department title ABOVE logo, centered ────────────────────────
         st.markdown(
             f"<div style='"
-            f"padding:0.6rem 1rem 0;"
+            f"padding:1.2rem 1rem 0.4rem;"
+            f"text-align:center;"
+            f"'>"
+            f"<div style='"
             f"font-family:Inter Tight,sans-serif;"
-            f"font-size:1.2rem;"
+            f"font-size:1.1rem;"
             f"font-weight:700;"
             f"color:{NAVY};"
             f"line-height:1.3;"
             f"letter-spacing:0.01em;"
             f"'>City of Brentwood</div>"
             f"<div style='"
-            f"padding:0.15rem 1rem 0.6rem;"
             f"font-family:Inter,sans-serif;"
-            f"font-size:0.97rem;"
+            f"font-size:0.88rem;"
             f"font-weight:500;"
             f"color:{MID_BLUE};"
             f"letter-spacing:0.02em;"
-            f"'>Engineering Department</div>",
+            f"margin-top:0.15rem;"
+            f"'>Engineering Department</div>"
+            f"</div>",
             unsafe_allow_html=True,
         )
+
+        # ── Color crest — fixed 120px width, centered ────────────────────
+        # use_container_width=True made the logo span the full sidebar and
+        # appear oversized. 120px is roughly half that and looks proportional.
+        logo_b64_sidebar = _logo_b64(color=True)
+        if logo_b64_sidebar:
+            st.markdown(
+                f"<div style='display:flex;justify-content:center;padding:0.4rem 0 0.8rem;'>"
+                f"<img src='{logo_b64_sidebar}' style='width:120px;height:auto;' alt='City of Brentwood Seal'>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         st.markdown("<hr class='bw-nav-divider'>", unsafe_allow_html=True)
 
         # ── Nav links ───────────────────────────────────────────────────
