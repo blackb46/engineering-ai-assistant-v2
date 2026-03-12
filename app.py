@@ -34,18 +34,13 @@ apply_theme()
 render_sidebar(active="home")
 
 # ── Startup ───────────────────────────────────────────────────────────────────
-# load_database() and get_rag_engine() are both decorated with
-# @st.cache_resource — they run once per server process and return
-# instantly on all subsequent calls (page navigations, button clicks).
-#
-# DO NOT wrap these in st.spinner at module level. Streamlit re-executes
-# app.py on every navigation back to the dashboard. A module-level spinner
-# races with the websocket SessionInfo initialization and produces the
-# "Bad message format / SessionInfo not initialized" error popup.
-#
-# On cold start the engine takes 15–30 seconds to load (HuggingFace model
-# download). During that window the dashboard renders with the System Status
-# section showing the loading state — no spinner needed.
+# NOTE: First load after deployment takes 30–60 seconds while the AI embedding
+# model (all-MiniLM-L6-v2) downloads from HuggingFace. Subsequent loads are
+# fast because st.cache_resource keeps the engine in memory for the session.
+# NOTE: No st.spinner() here — spinners at module level fire before Streamlit's
+# websocket (SessionInfo) is initialized, causing "Bad message format" popups.
+# load_database() and get_rag_engine() both use @st.cache_resource so they
+# return instantly on every render after the first cold start.
 db_info = load_database()
 
 engine_ready = False
