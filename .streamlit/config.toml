@@ -1,11 +1,12 @@
 [theme]
-primaryColor = "#1E88E5"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F5F5F5"
-textColor = "#212121"
-font = "sans serif"
+# City of Brentwood official color palette
+primaryColor    = "#F07138"   # Brentwood Orange — buttons, active states
+backgroundColor = "#F4F6F9"   # Cool gray — page background
+secondaryBackgroundColor = "#FFFFFF"  # White — cards, sidebar
+textColor       = "#1A2332"   # Dark navy — primary text
+font            = "sans serif"
 
 [server]
-headless = true
-enableCORS = false
+headless           = true
+enableCORS         = false
 enableXsrfProtection = true
