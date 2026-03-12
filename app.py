@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 import streamlit as st
 
+# Add utils/ to path for RAG/DB modules; repo root is already on sys.path
 sys.path.append(str(Path(__file__).parent / "utils"))
 
 from drive_loader import load_database, get_db_status_for_admin
