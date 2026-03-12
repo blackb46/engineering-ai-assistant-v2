@@ -34,7 +34,10 @@ apply_theme()
 render_sidebar(active="home")
 
 # ── Startup ───────────────────────────────────────────────────────────────────
-with st.spinner("Loading engineering document database..."):
+# NOTE: First load after deployment takes 30–60 seconds while the AI embedding
+# model (all-MiniLM-L6-v2) downloads from HuggingFace. Subsequent loads are
+# fast because st.cache_resource keeps the engine in memory for the session.
+with st.spinner("Loading AI engine — first startup may take up to 60 seconds..."):
     db_info = load_database()
 
 engine_ready = False
