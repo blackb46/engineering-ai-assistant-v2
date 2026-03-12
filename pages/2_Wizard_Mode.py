@@ -26,7 +26,7 @@ from checklist_data import (
     get_checklist_for_review_type
 )
 from comments_database import COMMENTS, get_comment
-from theme import apply_theme, render_sidebar, page_header, section_heading, footer
+from theme import apply_theme, render_sidebar, page_header, section_heading, footer, get_favicon
 
 try:
     from docx import Document
@@ -38,7 +38,7 @@ except ImportError:
     DOCX_AVAILABLE = False
 
 st.set_page_config(page_title="Wizard Mode — Brentwood Engineering AI",
-                   page_icon="📋", layout="wide")
+                   page_icon=get_favicon(), layout="wide")
 
 apply_theme()
 render_sidebar(active="wizard")
@@ -513,7 +513,6 @@ def main():
     page_header(
         title="Engineering Review Wizard",
         subtitle="Interactive plan review checklist with automatic comment generation",
-        icon_html="📋",
     )
 
     # =========================================================================
