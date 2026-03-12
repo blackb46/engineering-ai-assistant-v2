@@ -177,9 +177,31 @@ class RAGEngine:
                 "Check drive_loader status on the Admin panel."
             )
 
-        # Create embedding function — must match what build_corpus.py used
+        # Create embedding function — must match what build_corpus.py used.
+        #
+        # HUGGINGFACE RATE LIMIT FIX:
+        # Streamlit Cloud shares IP addresses across many deployments. HuggingFace
+        # rate-limits (HTTP 429) anonymous downloads from these shared IPs.
+        # Solution: pass an HF_TOKEN from Streamlit secrets if available, and
+        # set the cache folder so the model is only downloaded once per deployment.
+        import os
+        hf_token = None
+        try:
+            hf_token = st.secrets.get("HF_TOKEN")
+        except Exception:
+            pass
+
+        # Point sentence-transformers cache to a writable location on Streamlit Cloud
+        # so the model survives within a session and isn't re-downloaded each time.
+        cache_dir = os.environ.get(
+            "SENTENCE_TRANSFORMERS_HOME",
+            str(Path(__file__).parent.parent / ".cache" / "sentence_transformers")
+        )
+
         embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=EMBEDDING_MODEL
+            model_name=EMBEDDING_MODEL,
+            cache_folder=cache_dir,
+            **({"token": hf_token} if hf_token else {}),
         )
 
         # Connect to ChromaDB
