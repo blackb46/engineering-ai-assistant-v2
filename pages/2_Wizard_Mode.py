@@ -644,9 +644,10 @@ def _render_checklist():
                                     if comment_id in st.session_state.wizard_selected_comments[item_key]:
                                         st.session_state.wizard_selected_comments[item_key].remove(comment_id)
 
+                                # Nested expanders are illegal in Streamlit —
+                                # show the full text as a small caption instead.
                                 if len(comment_text) > 150:
-                                    with st.expander("View full comment"):
-                                        st.write(comment_text)
+                                    st.caption(comment_text)
 
                         st.markdown("**✏️ Custom notes (optional):**")
                         custom_note = st.text_area(
