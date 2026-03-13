@@ -629,27 +629,27 @@ def main():
                     )
 
                 with yes_col:
+                    def _set_yes(k=item_key):
+                        st.session_state.wizard_checklist_state[k] = "Yes"
+                        st.session_state.wizard_selected_comments.pop(k, None)
                     yes_type = "primary" if current_status == "Yes" else "secondary"
-                    if st.button("✓ Yes", key=f"yes_{item_key}", type=yes_type, use_container_width=True):
-                        st.session_state.wizard_checklist_state[item_key] = "Yes"
-                        # Clear comment state if switching away from No
-                        if item_key in st.session_state.wizard_selected_comments:
-                            del st.session_state.wizard_selected_comments[item_key]
-                        st.rerun()
+                    st.button("✓ Yes", key=f"yes_{item_key}", type=yes_type,
+                              use_container_width=True, on_click=_set_yes)
 
                 with no_col:
+                    def _set_no(k=item_key):
+                        st.session_state.wizard_checklist_state[k] = "No"
                     no_type = "primary" if current_status == "No" else "secondary"
-                    if st.button("✗ No", key=f"no_{item_key}", type=no_type, use_container_width=True):
-                        st.session_state.wizard_checklist_state[item_key] = "No"
-                        st.rerun()
+                    st.button("✗ No", key=f"no_{item_key}", type=no_type,
+                              use_container_width=True, on_click=_set_no)
 
                 with na_col:
+                    def _set_na(k=item_key):
+                        st.session_state.wizard_checklist_state[k] = "N/A"
+                        st.session_state.wizard_selected_comments.pop(k, None)
                     na_type = "primary" if current_status == "N/A" else "secondary"
-                    if st.button("N/A", key=f"na_{item_key}", type=na_type, use_container_width=True):
-                        st.session_state.wizard_checklist_state[item_key] = "N/A"
-                        if item_key in st.session_state.wizard_selected_comments:
-                            del st.session_state.wizard_selected_comments[item_key]
-                        st.rerun()
+                    st.button("N/A", key=f"na_{item_key}", type=na_type,
+                              use_container_width=True, on_click=_set_na)
 
                 # ── Comment panel — only renders when item is marked No ───────
                 if st.session_state.wizard_checklist_state.get(item_key) == "No":
@@ -684,8 +684,7 @@ def main():
                                     st.session_state.wizard_selected_comments[item_key].remove(comment_id)
 
                             if len(comment_text) > 150:
-                                with st.expander("View full comment"):
-                                    st.write(comment_text)
+                                st.caption(f"Full text: {comment_text}")
 
                         st.markdown("**✏️ Custom notes (optional):**")
                         custom_note = st.text_area(
