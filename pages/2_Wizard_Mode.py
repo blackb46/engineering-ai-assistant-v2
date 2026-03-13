@@ -526,9 +526,9 @@ def main():
     # STEP 1: PROJECT SETUP
     # =========================================================================
     section_heading("Step 1 — Project Setup")
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         review_type = st.selectbox(
             "Review Type",
@@ -536,14 +536,13 @@ def main():
             index=0 if not st.session_state.wizard_review_type else REVIEW_TYPES.index(st.session_state.wizard_review_type) + 1,
             key="review_type_select"
         )
-        
         if review_type and review_type != st.session_state.wizard_review_type:
             st.session_state.wizard_review_type = review_type
             reset_checklist()
             st.rerun()
         elif review_type:
             st.session_state.wizard_review_type = review_type
-    
+
     with col2:
         permit_number = st.text_input(
             "Permit Number",
@@ -551,7 +550,7 @@ def main():
             placeholder="e.g., SW2024-001"
         )
         st.session_state.wizard_permit_number = permit_number
-    
+
     with col3:
         address = st.text_input(
             "Address",
@@ -559,7 +558,7 @@ def main():
             placeholder="e.g., 1808 Sonoma Trce"
         )
         st.session_state.wizard_address = address
-    
+
     with col4:
         reviewer = st.selectbox(
             "Reviewer",
@@ -567,71 +566,112 @@ def main():
             index=0 if not st.session_state.wizard_reviewer else REVIEWERS.index(st.session_state.wizard_reviewer) + 1
         )
         st.session_state.wizard_reviewer = reviewer if reviewer else None
-    
+
     if not st.session_state.wizard_review_type:
         st.markdown('<div class="bw-status-warn">Select a review type above to begin the checklist.</div>', unsafe_allow_html=True)
         return
-    
+
     # =========================================================================
     # STEP 2: INTERACTIVE CHECKLIST
+    # PERFORMANCE: Sections use st.expander() so only the open section renders
+    # its items. Previously all 85 items rendered on every interaction (~290
+    # Streamlit widget calls). Now only the expanded section renders (~30 calls).
     # =========================================================================
     st.markdown("<hr>", unsafe_allow_html=True)
     section_heading(f"Step 2 — {st.session_state.wizard_review_type} Checklist")
-    
+
     checklist = get_checklist_for_review_type(st.session_state.wizard_review_type)
-    
+
     total_items = sum(len(section["items"]) for section in checklist.values())
     completed_items = len(st.session_state.wizard_checklist_state)
-    
+
     st.progress(completed_items / total_items if total_items > 0 else 0)
     st.caption(f"Progress: {completed_items} of {total_items} items reviewed")
-    
-    # Display checklist by section
+
+    # ── Checklist sections as expanders ──────────────────────────────────────
+    # Each section shows a completion count in the header so reviewers can
+    # see progress without expanding. Only the open section renders items.
     for section_id, section_data in checklist.items():
-        st.markdown(f'<div class="bw-section-header">{section_data["name"]}</div>', unsafe_allow_html=True)
-        
-        for item in section_data["items"]:
-            item_key = item["id"]
-            
-            col1, col2 = st.columns([3, 1])
-            
-            with col1:
-                st.markdown(f"**{item['id']}** - {item['description']}")
-            
-            with col2:
+        section_items = section_data["items"]
+        section_done  = sum(
+            1 for it in section_items
+            if it["id"] in st.session_state.wizard_checklist_state
+        )
+        section_total = len(section_items)
+        all_done = section_done == section_total
+
+        # Label shows completion count; green check when all done
+        status_icon = "✅" if all_done else "📋"
+        expander_label = (
+            f"{status_icon} {section_data['name']}  "
+            f"({section_done}/{section_total} reviewed)"
+        )
+
+        # Start first section expanded; rest collapsed
+        default_open = (section_id == list(checklist.keys())[0])
+
+        with st.expander(expander_label, expanded=default_open):
+            for item in section_items:
+                item_key = item["id"]
                 current_status = st.session_state.wizard_checklist_state.get(item_key, "—")
-                
-                status = st.radio(
-                    f"Status for {item_key}",
-                    options=["—", "Yes", "No", "N/A"],
-                    index=["—", "Yes", "No", "N/A"].index(current_status) if current_status in ["—", "Yes", "No", "N/A"] else 0,
-                    key=f"status_{item_key}",
-                    horizontal=True,
-                    label_visibility="collapsed"
-                )
-                
-                if status and status != "—":
-                    st.session_state.wizard_checklist_state[item_key] = status
-                elif item_key in st.session_state.wizard_checklist_state:
-                    del st.session_state.wizard_checklist_state[item_key]
-            
-            # If "No" is selected, show comment options
-            if st.session_state.wizard_checklist_state.get(item_key) == "No":
-                with st.container():
-                    st.markdown('<div class="bw-comment-box">', unsafe_allow_html=True)
-                    st.markdown("**📝 Select applicable comments:**")
-                    
+
+                # ── Item row: description + Yes / No / N/A buttons ───────────
+                # Using 3 small columns for Yes/No/NA avoids st.radio which
+                # renders 4 hidden radio inputs and is ~3x heavier per item.
+                desc_col, yes_col, no_col, na_col = st.columns([5, 1, 1, 1])
+
+                with desc_col:
+                    st.markdown(
+                        f"<div style='padding:0.4rem 0;font-size:0.93rem;'>"
+                        f"<strong style='color:#22427C'>{item['id']}</strong>"
+                        f" — {item['description']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                with yes_col:
+                    yes_type = "primary" if current_status == "Yes" else "secondary"
+                    if st.button("✓ Yes", key=f"yes_{item_key}", type=yes_type, use_container_width=True):
+                        st.session_state.wizard_checklist_state[item_key] = "Yes"
+                        # Clear comment state if switching away from No
+                        if item_key in st.session_state.wizard_selected_comments:
+                            del st.session_state.wizard_selected_comments[item_key]
+                        st.rerun()
+
+                with no_col:
+                    no_type = "primary" if current_status == "No" else "secondary"
+                    if st.button("✗ No", key=f"no_{item_key}", type=no_type, use_container_width=True):
+                        st.session_state.wizard_checklist_state[item_key] = "No"
+                        st.rerun()
+
+                with na_col:
+                    na_type = "primary" if current_status == "N/A" else "secondary"
+                    if st.button("N/A", key=f"na_{item_key}", type=na_type, use_container_width=True):
+                        st.session_state.wizard_checklist_state[item_key] = "N/A"
+                        if item_key in st.session_state.wizard_selected_comments:
+                            del st.session_state.wizard_selected_comments[item_key]
+                        st.rerun()
+
+                # ── Comment panel — only renders when item is marked No ───────
+                if st.session_state.wizard_checklist_state.get(item_key) == "No":
                     comment_ids = item.get("comment_ids", [])
-                    
+
                     if comment_ids:
                         if item_key not in st.session_state.wizard_selected_comments:
                             st.session_state.wizard_selected_comments[item_key] = []
-                        
+
+                        st.markdown(
+                            "<div style='background:#FFFBF0;border-left:3px solid #E8A000;"
+                            "padding:0.6rem 1rem;margin:0.3rem 0 0.5rem 1rem;"
+                            "border-radius:0 6px 6px 0;font-size:0.9em;'>",
+                            unsafe_allow_html=True
+                        )
+                        st.markdown("**📝 Select applicable comments:**")
+
                         for comment_id in comment_ids:
                             comment_text = COMMENTS.get(comment_id, "Comment not found")
                             display_text = comment_text[:150] + "..." if len(comment_text) > 150 else comment_text
                             is_selected = comment_id in st.session_state.wizard_selected_comments[item_key]
-                            
+
                             if st.checkbox(
                                 f"**{comment_id}**: {display_text}",
                                 value=is_selected,
@@ -642,81 +682,70 @@ def main():
                             else:
                                 if comment_id in st.session_state.wizard_selected_comments[item_key]:
                                     st.session_state.wizard_selected_comments[item_key].remove(comment_id)
-                            
+
                             if len(comment_text) > 150:
                                 with st.expander("View full comment"):
                                     st.write(comment_text)
-                    
-                    st.markdown("**✏️ Custom notes (optional):**")
-                    custom_note = st.text_area(
-                        "Custom note",
-                        value=st.session_state.wizard_custom_notes.get(item_key, ""),
-                        key=f"custom_{item_key}",
-                        height=80,
-                        label_visibility="collapsed",
-                        placeholder="Add any additional comments specific to this review..."
-                    )
-                    st.session_state.wizard_custom_notes[item_key] = custom_note
-                    
-                    st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown("<hr>", unsafe_allow_html=True)
-    
+
+                        st.markdown("**✏️ Custom notes (optional):**")
+                        custom_note = st.text_area(
+                            "Custom note",
+                            value=st.session_state.wizard_custom_notes.get(item_key, ""),
+                            key=f"custom_{item_key}",
+                            height=80,
+                            label_visibility="collapsed",
+                            placeholder="Add any additional comments specific to this review..."
+                        )
+                        st.session_state.wizard_custom_notes[item_key] = custom_note
+                        st.markdown("</div>", unsafe_allow_html=True)
+
     # =========================================================================
     # STANDALONE RESUBMITTAL QUESTION
-    # Positioned between the checklist and Step 3, inside its own styled box
     # =========================================================================
     st.markdown('<div class="bw-resubmittal-box">', unsafe_allow_html=True)
-    
     resub_col1, resub_col2 = st.columns([3, 1])
-    
+
     with resub_col1:
         st.markdown("**📬 Add standard resubmittal comment?**")
-        # Show preview of what BB-0045 says
         resub_text = COMMENTS.get("BB-0045", "")
         if resub_text:
             st.caption(f'BB-0045: "{resub_text}"')
-    
+
     with resub_col2:
         resubmittal = st.radio(
             "Resubmittal",
             options=["—", "Yes", "N/A"],
-            index=["—", "Yes", "N/A"].index(st.session_state.wizard_resubmittal) if st.session_state.wizard_resubmittal in ["—", "Yes", "N/A"] else 0,
+            index=["—", "Yes", "N/A"].index(st.session_state.wizard_resubmittal)
+                  if st.session_state.wizard_resubmittal in ["—", "Yes", "N/A"] else 0,
             key="resubmittal_radio",
             horizontal=True,
             label_visibility="collapsed"
         )
         st.session_state.wizard_resubmittal = resubmittal
-    
+
     st.markdown('</div>', unsafe_allow_html=True)
-    
+
     # =========================================================================
     # STEP 3: REVIEW SUMMARY & EXPORT
     # =========================================================================
     st.markdown("<hr>", unsafe_allow_html=True)
     section_heading("Step 3 — Review Summary & Export")
-    
+
     yes_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "Yes")
-    no_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "No")
-    na_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "N/A")
-    
-    # Include resubmittal in the "has comments" logic
+    no_count  = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "No")
+    na_count  = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "N/A")
+
     has_comments = no_count > 0 or st.session_state.wizard_resubmittal == "Yes"
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("✅ Compliant", yes_count)
-    with col2:
-        st.metric("❌ Issues Found", no_count)
-    with col3:
-        st.metric("➖ N/A", na_count)
-    with col4:
-        st.metric("📝 Total Reviewed", yes_count + no_count + na_count)
-    
-    # Export section
+    with col1: st.metric("✅ Compliant",    yes_count)
+    with col2: st.metric("❌ Issues Found", no_count)
+    with col3: st.metric("➖ N/A",          na_count)
+    with col4: st.metric("📝 Total Reviewed", yes_count + no_count + na_count)
+
     st.markdown('<div class="bw-export-section">', unsafe_allow_html=True)
     section_heading("Export Review")
-    
+
     if not has_comments and (yes_count + na_count) > 0:
         st.success("✅ No issues found! All reviewed items are compliant.")
     elif has_comments:
@@ -726,10 +755,9 @@ def main():
         if st.session_state.wizard_resubmittal == "Yes":
             comment_parts.append("resubmittal comment included")
         st.warning(f"⚠️ {' + '.join(comment_parts)}.")
-    
-    # Row 1: Word Document + Clear Review
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         if DOCX_AVAILABLE:
             if st.button("📄 Generate Word Document", type="primary", use_container_width=True):
@@ -749,24 +777,22 @@ def main():
                             use_container_width=True
                         )
         else:
-            st.warning("python-docx not available. Install it to enable Word export.")
-    
+            st.warning("python-docx not available.")
+
     with col2:
         if st.button("🗑️ Clear Review", use_container_width=True):
             reset_checklist()
             st.session_state.wizard_permit_number = ""
-            st.session_state.wizard_address = ""
-            st.session_state.wizard_reviewer = None
+            st.session_state.wizard_address       = ""
+            st.session_state.wizard_reviewer      = None
             st.rerun()
 
-    # Row 2: LAMA CSV + Bluebeam BAX (shown when there are any comments)
     if has_comments:
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
         section_heading("Extract Comments")
 
         permit_num = st.session_state.wizard_permit_number or "review"
-        datestamp = datetime.now().strftime('%Y%m%d')
-
+        datestamp  = datetime.now().strftime('%Y%m%d')
         col_e1, col_e2 = st.columns(2)
 
         with col_e1:
@@ -790,40 +816,35 @@ def main():
                     file_name=f"Markups_{permit_num}_{datestamp}.bax",
                     mime="application/octet-stream",
                     use_container_width=True,
-                    help="Import into Bluebeam via Markup → Import (.bax format with full styling)"
+                    help="Import into Bluebeam via Markup → Import (.bax format)"
                 )
-    
+
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Quick copy section for comments
+
     if has_comments:
         st.markdown("<hr>", unsafe_allow_html=True)
         section_heading("Quick Copy — All Comments")
         st.caption("Copy these comments directly into Bluebeam or your permit system:")
-        
+
         all_comments = []
         checklist = get_checklist_for_review_type(st.session_state.wizard_review_type)
         for section_id, section_data in checklist.items():
             for item in section_data["items"]:
                 item_key = item["id"]
                 if st.session_state.wizard_checklist_state.get(item_key) == "No":
-                    selected = st.session_state.wizard_selected_comments.get(item_key, [])
-                    custom_note = st.session_state.wizard_custom_notes.get(item_key, "")
-                    
-                    for comment_id in selected:
+                    for comment_id in st.session_state.wizard_selected_comments.get(item_key, []):
                         comment_text = COMMENTS.get(comment_id, "")
                         if comment_text:
                             all_comments.append(f"[{comment_id}] {comment_text}")
-                    
+                    custom_note = st.session_state.wizard_custom_notes.get(item_key, "")
                     if custom_note.strip():
                         all_comments.append(f"[CUSTOM] {custom_note}")
-        
-        # Append resubmittal at the end
+
         if st.session_state.wizard_resubmittal == "Yes":
             resub_text = COMMENTS.get("BB-0045", "")
             if resub_text:
                 all_comments.append(f"[BB-0045] {resub_text}")
-        
+
         if all_comments:
             comments_text = "\n\n".join(f"{i+1}. {c}" for i, c in enumerate(all_comments))
             st.text_area(
@@ -832,8 +853,7 @@ def main():
                 height=300,
                 label_visibility="collapsed"
             )
-    
-    # ── Bottom navigation ──────────────────────────────────────────────────────
+
     st.markdown("<hr>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
@@ -847,6 +867,5 @@ def main():
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
-# Streamlit runs this file as __main__, so this block executes on every page load.
 if __name__ == "__main__":
     main()
