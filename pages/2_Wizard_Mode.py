@@ -2,7 +2,7 @@
 2_Wizard_Mode.py
 ================
 City of Brentwood Engineering AI Assistant - V2
-Wizard Mode — interactive plan review checklist with export.
+Checklist Mode — interactive plan review checklist with export.
 """
 
 import streamlit as st
@@ -41,7 +41,7 @@ try:
 except ImportError:
     DOCX_AVAILABLE = False
 
-st.set_page_config(page_title="Wizard Mode — Brentwood Engineering AI",
+st.set_page_config(page_title="Checklist Mode — Brentwood Engineering AI",
                    page_icon=get_favicon(), layout="wide")
 
 apply_theme()
@@ -61,6 +61,35 @@ st.markdown("""
         font-weight: 700;
         letter-spacing: 0.02em;
         border-radius: 0 6px 6px 0;
+    }
+
+    /* ── Step headings (Step 1, Step 2, Step 3) — prominent and bold ──── */
+    .bw-step-heading {
+        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #22427C;
+        border-bottom: 3px solid #F07138;
+        padding-bottom: 0.55rem;
+        margin: 2.2rem 0 1.1rem;
+        letter-spacing: -0.02em;
+    }
+
+    /* ── Expander labels — section titles large and bold ──────────────── */
+    [data-testid="stExpander"] summary {
+        font-size: 1.15rem !important;
+        font-weight: 700 !important;
+        color: #22427C !important;
+        padding: 16px 18px !important;
+        letter-spacing: -0.01em !important;
+    }
+    [data-testid="stExpander"] summary:hover {
+        background: #EEF2F9 !important;
+    }
+    [data-testid="stExpander"] summary p {
+        font-size: 1.15rem !important;
+        font-weight: 700 !important;
+        color: #22427C !important;
     }
     /* ── Comment box (shown when No selected) ────────────────────────── */
     .bw-comment-box {
@@ -543,7 +572,7 @@ def _render_checklist():
         return
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    section_heading(f"Step 2 — {review_type} Checklist")
+    st.markdown(f"<div class='bw-step-heading'>Step 2 — {review_type} Checklist</div>", unsafe_allow_html=True)
 
     checklist     = get_checklist_for_review_type(review_type)
     total_items   = sum(len(s["items"]) for s in checklist.values())
@@ -665,18 +694,18 @@ def _render_checklist():
 
 
 def main():
-    """Main function for Wizard Mode"""
+    """Main function for Checklist Mode"""
     initialize_session_state()
 
     page_header(
-        title="Engineering Review Wizard",
+        title="Engineering Checklist Mode",
         subtitle="Interactive plan review checklist with automatic comment generation",
     )
 
     # =========================================================================
     # STEP 1: PROJECT SETUP
     # =========================================================================
-    section_heading("Step 1 — Project Setup")
+    st.markdown("<div class='bw-step-heading'>Step 1 — Project Setup</div>", unsafe_allow_html=True)
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -763,7 +792,7 @@ def main():
     # STEP 3: REVIEW SUMMARY & EXPORT
     # =========================================================================
     st.markdown("---")
-    st.subheader("📊 Step 3: Review Summary & Export")
+    st.markdown("<div class='bw-step-heading'>Step 3 — Review Summary &amp; Export</div>", unsafe_allow_html=True)
     
     yes_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "Yes")
     no_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "No")
@@ -866,7 +895,7 @@ def main():
     # Quick copy section for comments
     if has_comments:
         st.markdown("---")
-        st.subheader("📋 Quick Copy - All Comments")
+        st.markdown("<div class='bw-step-heading'>Quick Copy — All Comments</div>", unsafe_allow_html=True)
         st.caption("Copy these comments directly into Bluebeam or your permit system:")
         
         all_comments = []
@@ -908,7 +937,7 @@ def main():
         if st.button("🏠 Home"):
             st.switch_page("app.py")
     with col2:
-        if st.button("💬 Q&A Mode"):
+        if st.button("💬 Chatbot Mode"):
             st.switch_page("pages/1_QA_Mode.py")
 
 

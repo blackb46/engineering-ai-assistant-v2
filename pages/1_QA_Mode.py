@@ -2,7 +2,7 @@
 1_QA_Mode.py
 ============
 City of Brentwood Engineering AI Assistant - V2
-Q&A Mode — policy question answering with footnote citations.
+Chatbot Mode — policy question answering with footnote citations.
 """
 
 import sys
@@ -21,7 +21,7 @@ from theme         import apply_theme, render_sidebar, page_header, section_head
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Q&A Mode — Brentwood Engineering AI",
+    page_title="Chatbot Mode — Brentwood Engineering AI",
     page_icon=get_favicon(),
     layout="wide",
 )
@@ -121,7 +121,7 @@ def _display_citations(citations: list):
 
 def main():
     page_header(
-        title="Engineering Question and Answer Mode",
+        title="Engineering Chatbot Mode",
         subtitle="Answers grounded in the Brentwood Municipal Code and Engineering Policy Manual",
     )
 
@@ -152,7 +152,7 @@ def main():
 
     st.markdown(
         "<div class='bw-status-ok' style='margin-bottom:1rem'>"
-        "✅ &nbsp;Q&A system ready — 26 Brentwood engineering documents indexed"
+        "✅ &nbsp;Chatbot system ready — 26 Brentwood engineering documents indexed"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -395,7 +395,7 @@ Sources conflict. Do not act on this answer alone — verify with the City Engin
         if st.button("← Dashboard", use_container_width=True):
             st.switch_page("app.py")
     with c2:
-        if st.button("Wizard Mode →", use_container_width=True):
+        if st.button("Checklist Mode →", use_container_width=True):
             st.switch_page("pages/2_Wizard_Mode.py")
 
     footer()
