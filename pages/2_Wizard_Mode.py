@@ -506,62 +506,19 @@ def generate_bluebeam_bax():
     return b'\xef\xbb\xbf' + bax_crlf.encode('utf-8')
 
 
-def main():
-    """Main function for Wizard Mode"""
-    initialize_session_state()
 
-    page_header(
-        title="Engineering Review Wizard",
-        subtitle="Interactive plan review checklist with automatic comment generation",
-    )
+@st.fragment
+def _render_checklist():
+    """
+    Checklist + resubmittal section as a st.fragment.
 
-    # =========================================================================
-    # STEP 1: PROJECT SETUP
-    # =========================================================================
-    section_heading("Step 1 — Project Setup")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        review_type = st.selectbox(
-            "Review Type",
-            options=[""] + REVIEW_TYPES,
-            index=0 if not st.session_state.wizard_review_type else REVIEW_TYPES.index(st.session_state.wizard_review_type) + 1,
-            key="review_type_select"
-        )
-        if review_type and review_type != st.session_state.wizard_review_type:
-            st.session_state.wizard_review_type = review_type
-            reset_checklist()
-            st.rerun()
-        elif review_type:
-            st.session_state.wizard_review_type = review_type
-
-    with col2:
-        permit_number = st.text_input(
-            "Permit Number",
-            value=st.session_state.wizard_permit_number,
-            placeholder="e.g., SW2024-001"
-        )
-        st.session_state.wizard_permit_number = permit_number
-
-    with col3:
-        address = st.text_input(
-            "Address",
-            value=st.session_state.wizard_address,
-            placeholder="e.g., 1808 Sonoma Trce"
-        )
-        st.session_state.wizard_address = address
-
-    with col4:
-        reviewer = st.selectbox(
-            "Reviewer",
-            options=[""] + REVIEWERS,
-            index=0 if not st.session_state.wizard_reviewer else REVIEWERS.index(st.session_state.wizard_reviewer) + 1
-        )
-        st.session_state.wizard_reviewer = reviewer if reviewer else None
-
-    if not st.session_state.wizard_review_type:
-        st.markdown('<div class="bw-status-warn">Select a review type above to begin the checklist.</div>', unsafe_allow_html=True)
+    st.fragment causes ONLY this section to rerender when a Yes/No/NA button
+    is clicked. The page header, sidebar, CSS injection, and Step 3 summary
+    do NOT rerender. This eliminates the full-page round-trip on every
+    checklist interaction — making button clicks feel instantaneous.
+    """
+    review_type = st.session_state.wizard_review_type
+    if not review_type:
         return
 
     # =========================================================================
@@ -717,7 +674,75 @@ def main():
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+
+
+
+def main():
+    """Main function for Wizard Mode"""
+    initialize_session_state()
+
+    page_header(
+        title="Engineering Review Wizard",
+        subtitle="Interactive plan review checklist with automatic comment generation",
+    )
+
     # =========================================================================
+    # STEP 1: PROJECT SETUP
+    # =========================================================================
+    section_heading("Step 1 — Project Setup")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        review_type = st.selectbox(
+            "Review Type",
+            options=[""] + REVIEW_TYPES,
+            index=0 if not st.session_state.wizard_review_type else REVIEW_TYPES.index(st.session_state.wizard_review_type) + 1,
+            key="review_type_select"
+        )
+        if review_type and review_type != st.session_state.wizard_review_type:
+            st.session_state.wizard_review_type = review_type
+            reset_checklist()
+            st.rerun()
+        elif review_type:
+            st.session_state.wizard_review_type = review_type
+
+    with col2:
+        permit_number = st.text_input(
+            "Permit Number",
+            value=st.session_state.wizard_permit_number,
+            placeholder="e.g., SW2024-001"
+        )
+        st.session_state.wizard_permit_number = permit_number
+
+    with col3:
+        address = st.text_input(
+            "Address",
+            value=st.session_state.wizard_address,
+            placeholder="e.g., 1808 Sonoma Trce"
+        )
+        st.session_state.wizard_address = address
+
+    with col4:
+        reviewer = st.selectbox(
+            "Reviewer",
+            options=[""] + REVIEWERS,
+            index=0 if not st.session_state.wizard_reviewer else REVIEWERS.index(st.session_state.wizard_reviewer) + 1
+        )
+        st.session_state.wizard_reviewer = reviewer if reviewer else None
+
+    if not st.session_state.wizard_review_type:
+        st.markdown('<div class="bw-status-warn">Select a review type above to begin the checklist.</div>', unsafe_allow_html=True)
+        return
+
+    # =========================================================================
+    # STEP 2: INTERACTIVE CHECKLIST (rendered as st.fragment for instant response)
+    # st.fragment means only this section rerenders on button clicks —
+    # not the header, sidebar, CSS, or Step 3 summary.
+    # =========================================================================
+    _render_checklist()
+
+        # =========================================================================
     # STEP 3: REVIEW SUMMARY & EXPORT
     # =========================================================================
     st.markdown("<hr>", unsafe_allow_html=True)
