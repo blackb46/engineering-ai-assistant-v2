@@ -557,8 +557,14 @@ def _render_checklist():
             f"({section_done}/{section_total} reviewed)"
         )
 
-        # Start first section expanded; rest collapsed
-        default_open = (section_id == list(checklist.keys())[0])
+        # Keep the active section open after button clicks.
+        # wizard_open_section stores the section_id the user last interacted
+        # with. On fragment rerender we restore that section as expanded so
+        # the user doesn't lose their place when clicking Yes/No/NA.
+        if "wizard_open_section" not in st.session_state:
+            st.session_state.wizard_open_section = list(checklist.keys())[0]
+
+        default_open = (section_id == st.session_state.wizard_open_section)
 
         with st.expander(expander_label, expanded=default_open):
             for item in section_items:
@@ -579,24 +585,27 @@ def _render_checklist():
                     )
 
                 with yes_col:
-                    def _set_yes(k=item_key):
+                    def _set_yes(k=item_key, s=section_id):
                         st.session_state.wizard_checklist_state[k] = "Yes"
                         st.session_state.wizard_selected_comments.pop(k, None)
+                        st.session_state.wizard_open_section = s
                     yes_type = "primary" if current_status == "Yes" else "secondary"
                     st.button("✓ Yes", key=f"yes_{item_key}", type=yes_type,
                               use_container_width=True, on_click=_set_yes)
 
                 with no_col:
-                    def _set_no(k=item_key):
+                    def _set_no(k=item_key, s=section_id):
                         st.session_state.wizard_checklist_state[k] = "No"
+                        st.session_state.wizard_open_section = s
                     no_type = "primary" if current_status == "No" else "secondary"
                     st.button("✗ No", key=f"no_{item_key}", type=no_type,
                               use_container_width=True, on_click=_set_no)
 
                 with na_col:
-                    def _set_na(k=item_key):
+                    def _set_na(k=item_key, s=section_id):
                         st.session_state.wizard_checklist_state[k] = "N/A"
                         st.session_state.wizard_selected_comments.pop(k, None)
+                        st.session_state.wizard_open_section = s
                     na_type = "primary" if current_status == "N/A" else "secondary"
                     st.button("N/A", key=f"na_{item_key}", type=na_type,
                               use_container_width=True, on_click=_set_na)
