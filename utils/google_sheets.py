@@ -42,6 +42,10 @@ VERSION: 2.0
 
 from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+# Brentwood, TN — Central Time (handles CST/CDT automatically)
+_CT = ZoneInfo("America/Chicago")
 
 import streamlit as st
 import gspread
@@ -185,7 +189,7 @@ def log_flagged_response(
     try:
         _ensure_headers(worksheet)
 
-        timestamp     = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp     = datetime.now(_CT).strftime("%Y-%m-%d %I:%M:%S %p")
         disc_display  = discrepancy_flag if discrepancy_flag else "none"
         abst_display  = "Yes" if abstained else "No"
 
