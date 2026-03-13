@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 import streamlit as st
 
+# pages/ is one level down — add both utils/ and repo root
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -18,10 +19,11 @@ from database      import AuditLogger
 from google_sheets import log_flagged_response
 from theme         import apply_theme, render_sidebar, page_header, section_heading, footer, get_favicon
 
+# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title = "Q&A Mode — Brentwood Engineering AI",
-    page_icon  = get_favicon(),
-    layout     = "wide",
+    page_title="Q&A Mode — Brentwood Engineering AI",
+    page_icon=get_favicon(),
+    layout="wide",
 )
 
 apply_theme()
@@ -63,7 +65,7 @@ def _display_answer(result: dict):
     if result.get("abstained"):
         st.markdown(f"""
         <div class="bw-abstain-box">
-            <span style="font-weight:600;color:#6B7280;">System could not answer from documents</span><br>
+            <span style="font-weight:600;color:#64748B;">System could not answer from documents</span><br>
             <span style="font-size:0.93em">{answer}</span>
         </div>
         """, unsafe_allow_html=True)
@@ -79,6 +81,7 @@ def _display_answer(result: dict):
 def _display_citations(citations: list):
     if not citations:
         return
+
     superscripts = ["¹","²","³","⁴","⁵","⁶","⁷","⁸","⁹","¹⁰"]
     items_html = ""
     for c in citations:
@@ -89,9 +92,10 @@ def _display_citations(citations: list):
             f"<li>"
             f"<span style='display:inline-block;min-width:1.4rem;"
             f"font-weight:700;color:#F07138;'>{sup}</span>"
-            f"<span style='color:#111827'>{text}</span>"
+            f"<span style='color:#1A2332'>{text}</span>"
             f"</li>"
         )
+
     st.markdown(f"""
     <div class="bw-citation-box">
         <div class="cit-header">Sources</div>
@@ -104,9 +108,8 @@ def _display_citations(citations: list):
 
 def main():
     page_header(
-        title      = "Q&A Mode",
-        subtitle   = "Answers grounded in the Brentwood Municipal Code and Engineering Policy Manual",
-        breadcrumb = "Q&A Mode",
+        title="Engineering Question and Answer Mode",
+        subtitle="Answers grounded in the Brentwood Municipal Code and Engineering Policy Manual",
     )
 
     _init_session_state()
@@ -119,6 +122,11 @@ def main():
             st.switch_page("app.py")
         return
 
+    # NOTE: No st.spinner() here — spinner calls trigger SessionInfo before
+    # the websocket is initialized, causing "Bad message format" popups.
+    # get_rag_engine() is @st.cache_resource so after the first cold start
+    # it returns instantly from cache. On cold start the status bar shows
+    # activity naturally without needing an explicit spinner.
     engine = get_rag_engine(db_info["local_path"])
     if not engine.is_ready():
         st.error(f"RAG engine not ready: {engine.get_init_error() or 'Unknown error'}")
@@ -130,7 +138,7 @@ def main():
         st.session_state.audit_logger = AuditLogger()
 
     st.markdown(
-        "<div class='bw-status-ok' style='margin-bottom:20px'>"
+        "<div class='bw-status-ok' style='margin-bottom:1rem'>"
         "✅ &nbsp;Q&A system ready — 26 Brentwood engineering documents indexed"
         "</div>",
         unsafe_allow_html=True,
@@ -143,7 +151,7 @@ def main():
         section_heading("Your Question")
 
         question = st.text_area(
-            "Question",
+            "Enter your engineering policy question:",
             height=100,
             placeholder=(
                 "e.g., What is the minimum riparian buffer width for a perennial stream?\n"
@@ -212,25 +220,30 @@ def main():
             result = st.session_state.current_result
 
             st.markdown(
-                f"<div style='font-size:12px;color:#9CA3AF;margin:16px 0 6px;'>"
-                f"<strong style='color:#6B7280'>Question:</strong> {st.session_state.current_question}"
+                f"<div style='font-size:0.85rem;color:#4A5568;margin:1rem 0 0.4rem;'>"
+                f"<strong>Question:</strong> {st.session_state.current_question}"
                 f"</div>",
                 unsafe_allow_html=True,
             )
 
+            # Flag banner
             if result.get("discrepancy_flag") and result.get("discrepancy_note"):
                 _display_flag(result["discrepancy_flag"], result["discrepancy_note"])
 
+            # Answer
             _display_answer(result)
 
+            # Citations
             if result.get("citations"):
                 _display_citations(result["citations"])
 
+            # Performance details (collapsed)
             with st.expander("Query details", expanded=False):
                 c1, c2, c3 = st.columns(3)
                 with c1: st.metric("Chunks Searched", result.get("chunks_used", 0))
-                with c2: st.metric("Sources Cited",   len(result.get("citations", [])))
-                with c3: st.metric("Response Time",   f"{result.get('elapsed_seconds', 0):.1f}s")
+                with c2: st.metric("Sources Cited", len(result.get("citations", [])))
+                with c3: st.metric("Response Time",
+                                   f"{result.get('elapsed_seconds', 0):.1f}s")
 
             # ── Feedback ───────────────────────────────────────────────
             st.markdown("<hr>", unsafe_allow_html=True)
@@ -253,7 +266,7 @@ def main():
                 st.markdown("""
                 <div class="bw-feedback-panel">
                     <strong>Report an Issue</strong><br>
-                    <span style="font-size:13px;color:#6B7280">
+                    <span style="font-size:0.9em;color:#4A5568">
                     Help us improve — describe what was wrong with this response.
                     </span>
                 </div>
@@ -314,34 +327,34 @@ def main():
     with col_right:
         section_heading("Example Questions")
         st.markdown("""
-<div class="bw-card" style="font-size:13px;line-height:1.75;">
-<strong style="color:#22427C;font-size:12px;text-transform:uppercase;letter-spacing:0.06em">Driveways</strong><br>
+<div class="bw-card" style="font-size:0.87rem;line-height:1.7;">
+<strong style="color:#22427C">Driveways</strong><br>
 What is the maximum driveway grade for a residential lot?<br>
 What is the minimum inside turning radius for a driveway?<br><br>
-<strong style="color:#22427C;font-size:12px;text-transform:uppercase;letter-spacing:0.06em">Retaining Walls</strong><br>
+<strong style="color:#22427C">Retaining Walls</strong><br>
 What is the maximum retaining wall height inside the building envelope?<br>
 When does a retaining wall require a PE stamp?<br><br>
-<strong style="color:#22427C;font-size:12px;text-transform:uppercase;letter-spacing:0.06em">Stormwater</strong><br>
+<strong style="color:#22427C">Stormwater</strong><br>
 What design storm frequency applies to subdivision drainage?<br>
 What are the riparian buffer widths for a perennial stream?<br><br>
-<strong style="color:#22427C;font-size:12px;text-transform:uppercase;letter-spacing:0.06em">Pools &amp; Fences</strong><br>
+<strong style="color:#22427C">Pools & Fences</strong><br>
 How long must pool water be de-chlorinated before discharge?<br>
 What fence materials are prohibited in Brentwood?
 </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
         section_heading("Understanding Flags")
         st.markdown("""
-<div class="bw-card" style="font-size:13px;line-height:1.8;">
-<span style="color:#D97706">⚠️ <strong>More Restrictive</strong></span><br>
+<div class="bw-card" style="font-size:0.87rem;line-height:1.8;">
+<span style="color:#E8A000">⚠️ <strong>More Restrictive</strong></span><br>
 Policy Manual adds requirements beyond the Code. Both apply — follow the stricter standard.<br><br>
 <span style="color:#DC2626">🔴 <strong>Discrepancy</strong></span><br>
 Sources conflict. Do not act on this answer alone — verify with the City Engineer.
 </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
         section_heading("Recent Queries")
         try:
             recent = st.session_state.audit_logger.get_recent_queries(limit=5)
@@ -350,9 +363,9 @@ Sources conflict. Do not act on this answer alone — verify with the City Engin
                     preview = q["question"][:50] + "..." \
                               if len(q["question"]) > 50 else q["question"]
                     flag_icon = ""
-                    if q.get("discrepancy_flag") == "conflict":         flag_icon = " 🔴"
+                    if q.get("discrepancy_flag") == "conflict":      flag_icon = " 🔴"
                     elif q.get("discrepancy_flag") == "more_restrictive": flag_icon = " ⚠️"
-                    elif q.get("abstained"):                              flag_icon = " ○"
+                    elif q.get("abstained"):                          flag_icon = " ○"
                     with st.expander(f"{preview}{flag_icon}"):
                         st.caption(f"Asked: {q.get('timestamp','')[:19]}")
                         if q.get("discrepancy_flag"):
