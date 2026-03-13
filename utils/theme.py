@@ -281,6 +281,42 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     margin: 32px 0 16px;
 }
 
+/* ── Step heading (Step 1, Step 2 in Checklist Mode) ────────────── */
+.bw-step-heading {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--navy);
+    border-left: 4px solid var(--orange);
+    padding: 10px 16px;
+    margin: 28px 0 16px;
+    background: var(--surface-3);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+}
+
+/* ── Expander section headers — larger, bolder ───────────────────── */
+[data-testid="stExpander"] summary {
+    font-family: var(--font-display) !important;
+    font-weight: 700 !important;
+    font-size: 1.05rem !important;
+    color: var(--navy) !important;
+    padding: 14px 16px !important;
+    letter-spacing: -0.01em !important;
+}
+[data-testid="stExpander"] summary:hover {
+    background: var(--surface-2) !important;
+    border-radius: var(--radius) !important;
+}
+[data-testid="stExpander"] summary p {
+    font-family: var(--font-display) !important;
+    font-weight: 700 !important;
+    font-size: 1.05rem !important;
+    color: var(--navy) !important;
+    margin: 0 !important;
+}
+
 /* ── Cards ──────────────────────────────────────────────────────── */
 .bw-card { background: var(--white) !important; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow-sm); }
 .bw-card-accent { border-left: 4px solid var(--navy); }
@@ -418,9 +454,7 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
 [data-testid="stSelectbox"] > div > div:focus-within { border-color: var(--navy) !important; box-shadow: 0 0 0 3px rgba(34,66,124,0.12) !important; }
 
 /* ── Expander ───────────────────────────────────────────────────── */
-[data-testid="stExpander"] { border: 1px solid var(--border) !important; border-radius: var(--radius) !important; background: var(--white) !important; box-shadow: var(--shadow-xs) !important; margin-bottom: 6px !important; }
-[data-testid="stExpander"] summary { font-family: var(--font-body) !important; font-weight: 600 !important; font-size: var(--text-sm) !important; color: var(--navy) !important; padding: 12px 16px !important; }
-[data-testid="stExpander"] summary:hover { background: var(--surface-2) !important; border-radius: var(--radius) !important; }
+[data-testid="stExpander"] { border: 1px solid var(--border) !important; border-radius: var(--radius) !important; background: var(--white) !important; box-shadow: var(--shadow-xs) !important; margin-bottom: 8px !important; }
 
 /* ── Back-to-top button ─────────────────────────────────────────── */
 #btt-btn {
@@ -475,9 +509,9 @@ def render_sidebar(active: str = "home"):
             unsafe_allow_html=True,
         )
         st.markdown("<span class='bw-nav-section-label'>Navigation</span>", unsafe_allow_html=True)
-        _nav_link("app.py",                 "Dashboard",   active == "home",   "⬛")
-        _nav_link("pages/1_QA_Mode.py",     "Q&A Mode",    active == "qa",     "🔍")
-        _nav_link("pages/2_Wizard_Mode.py", "Wizard Mode", active == "wizard", "📋")
+        _nav_link("app.py",                 "Dashboard",      active == "home",   "⬛")
+        _nav_link("pages/1_QA_Mode.py",     "Chatbot Mode",   active == "qa",     "🔍")
+        _nav_link("pages/2_Wizard_Mode.py", "Checklist Mode", active == "wizard", "📋")
         st.markdown(
             """<hr class="bw-sidebar-divider">
             <div class="bw-sidebar-footer">
