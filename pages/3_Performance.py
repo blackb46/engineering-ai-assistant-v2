@@ -288,13 +288,14 @@ with p1:
               help="Injected via st.markdown() on every single render — including checkbox ticks")
 with p2:
     logo_kb = report['logo_bytes']/1024
-    st.metric("Logo base64", f"{logo_kb:.1f} KB",
-              help="Injected twice per render (sidebar + header). Cached after first load.")
+    st.metric("Logo PNG (bytes)", f"{logo_kb:.1f} KB",
+              help="Raw PNG size. Sent ONCE via st.image() — browser caches it. "
+                   "No longer embedded as base64 on every render.")
 with p3:
-    total_payload = css_size_bytes + report['logo_bytes']
-    st.metric("Total fixed payload/render", f"{total_payload/1024:.1f} KB",
-              delta=f"Fast V1 was ~2 KB", delta_color="inverse",
-              help="This goes over the websocket on EVERY interaction")
+    # Only CSS is sent on every render now — logo is browser-cached after first load
+    st.metric("Fixed payload/render (CSS only)", f"{css_size_bytes/1024:.1f} KB",
+              delta="Logo removed from per-render payload", delta_color="normal",
+              help="CSS is still injected every render. Logo is now browser-cached.")
 
 st.markdown("---")
 
