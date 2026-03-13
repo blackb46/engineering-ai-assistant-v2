@@ -5,12 +5,6 @@ City of Brentwood Engineering AI Assistant - V2
 Main application entry point and dashboard.
 """
 
-# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
-# MUST be the very first import — before streamlit and any torch-dependent libs.
-# Streamlit 1.43+ file watcher crashes when scanning torch.classes internals.
-import torch
-torch.classes.__path__ = []
-
 import sys
 from pathlib import Path
 import streamlit as st
