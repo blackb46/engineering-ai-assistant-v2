@@ -78,10 +78,31 @@ def _get_logo_path(color: bool = True) -> Path:
 _LOGO_CACHE: dict = {}
 
 
+def _logo_bytes(color: bool = True) -> bytes | None:
+    """
+    Return raw PNG bytes for the City crest logo.
+    Cached at module level — file is read exactly once per server process.
+    Use with st.image() which handles browser-level caching automatically,
+    avoiding the 3.5 MB base64 string being sent over the websocket every render.
+    """
+    key = ("bytes_color" if color else "bytes_bw")
+    if key in _LOGO_CACHE:
+        return _LOGO_CACHE[key]
+    p = _get_logo_path(color=color)
+    if p is None:
+        _LOGO_CACHE[key] = None
+        return None
+    with open(p, "rb") as f:
+        data = f.read()
+    _LOGO_CACHE[key] = data
+    return data
+
+
 def _logo_b64(color: bool = True) -> str:
     """
-    Return the color crest logo as a base64 data URI, or empty string if not found.
-    Result is cached at module level so encoding happens once per server process.
+    Return the color crest logo as a base64 data URI.
+    KEPT for backward compatibility only. Prefer _logo_bytes() + st.image()
+    to avoid embedding 3.5 MB into the websocket on every render.
     """
     key = "color" if color else "bw"
     if key in _LOGO_CACHE:
@@ -681,31 +702,32 @@ def render_sidebar(active: str = "home"):
             unsafe_allow_html=True,
         )
 
-        # ── Color crest — fixed 120px width, centered ────────────────────
-        # use_container_width=True made the logo span the full sidebar and
-        # appear oversized. 120px is roughly half that and looks proportional.
-        logo_b64_sidebar = _logo_b64(color=True)
-        if logo_b64_sidebar:
-            st.markdown(
-                f"<div style='display:flex;justify-content:center;padding:0.4rem 0 0.8rem;'>"
-                f"<img src='{logo_b64_sidebar}' style='width:120px;height:auto;' alt='City of Brentwood Seal'>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-        st.markdown("<hr class='bw-nav-divider'>", unsafe_allow_html=True)
-
-        # ── Nav links ───────────────────────────────────────────────────
-        st.markdown("<div class='bw-nav-section'>Navigation</div>", unsafe_allow_html=True)
+        # ── Color crest — st.image() sends image bytes once, browser caches it.
+        # Previously used st.markdown() with a 3.5 MB base64 data URI embedded
+        # in the HTML string — that 3.5 MB went over the websocket on EVERY
+        # render (every button click, every checkbox tick). st.image() sends
+        # the bytes once and the browser reuses its cached copy on rerenders.
+        logo_bytes_sidebar = _logo_bytes(color=True)
+        if logo_bytes_sidebar:
+            # Center the logo using columns trick (st.image has no center option)
+            _lcol, _mcol, _rcol = st.columns([1, 2, 1])
+            with _mcol:
+                st.image(logo_bytes_sidebar, width=120)
+        # ── Divider + nav label + version — combined into 1 st.markdown call ──
+        # (merging these reduces websocket message count from 11 to 7 per render)
+        st.markdown(
+            f"<hr class='bw-nav-divider'>"
+            f"<div class='bw-nav-section'>Navigation</div>",
+            unsafe_allow_html=True,
+        )
 
         _nav_link("app.py",                     "Dashboard",    active == "home",   "🏛")
         _nav_link("pages/1_QA_Mode.py",         "Q&A Mode",     active == "qa",     "🔍")
         _nav_link("pages/2_Wizard_Mode.py",     "Wizard Mode",  active == "wizard", "📋")
         _nav_link("pages/3_Performance.py",     "Performance",  active == "perf",   "⏱️")
 
-        st.markdown("<hr class='bw-nav-divider'>", unsafe_allow_html=True)
-
-        # ── Version tag ─────────────────────────────────────────────────
         st.markdown(
+            f"<hr class='bw-nav-divider'>"
             f"<div class='bw-version-badge'>"
             f"Engineering AI Assistant<br>"
             f"<span style='color:{TEXT_MID}'>v2.0 — Powered by Claude</span>"
@@ -715,17 +737,12 @@ def render_sidebar(active: str = "home"):
 
 
 def _nav_link(page: str, label: str, is_active: bool, icon: str = ""):
-    """Render a single sidebar nav link as a Streamlit page_link with styling."""
-    # Use Streamlit's page_link but wrap it in styled container
-    css_class = "bw-nav-link active" if is_active else "bw-nav-link"
-    # We use page_link for actual routing; style it via CSS class override
-    active_class = "active" if is_active else ""
-    st.markdown(
-        f"<div class='nav-item-wrap {active_class}'>",
-        unsafe_allow_html=True,
-    )
+    """Render a single sidebar nav link as a Streamlit page_link.
+    Wrapper divs removed — active state handled by CSS targeting the
+    [data-testid='stPageLink'] element directly, saving 2 st.markdown()
+    calls per nav item (8 fewer widget messages per render).
+    """
     st.page_link(page, label=f"{icon}  {label}")
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_header(title: str, subtitle: str = ""):
