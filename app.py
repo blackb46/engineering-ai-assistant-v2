@@ -62,33 +62,31 @@ page_header(
 if not db_info["success"]:
     st.error(
         "The document database could not be loaded. "
-        "Q&A Mode and Wizard Mode are unavailable. "
+        "Chatbot Mode and Checklist Mode are unavailable. "
         "Run build_corpus.py in Google Colab, push to GitHub, then reboot this app."
     )
     st.stop()
 
 # ── Mode selection ─────────────────────────────────────────────────────────────
-section_heading("Select a Mode")
+st.markdown("<div class='bw-select-mode-heading'>Select a Mode</div>",
+            unsafe_allow_html=True)
 
 col_qa, col_wiz = st.columns(2, gap="large")
 
 with col_qa:
     st.markdown("""
     <div class="bw-mode-card">
-        <div class="mode-icon">🔍</div>
-        <h3>Q&amp;A Mode</h3>
+        <div class="bw-mode-card-title-row">
+            <div class="mode-icon">🔍</div>
+            <h3>Chatbot Mode</h3>
+        </div>
         <p>Ask natural language questions about engineering policy. Answers are
         grounded in the Municipal Code and Engineering Policy Manual with
         precise footnote citations.</p>
-        <div class="bw-mode-card-tags">
-            <span class="bw-tag">Policy lookups</span>
-            <span class="bw-tag">Setback requirements</span>
-            <span class="bw-tag">Design standards</span>
-        </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-    if st.button("Open Q&A Mode →", key="qa_btn",
+    if st.button("Open Chatbot Mode →", key="qa_btn",
                  use_container_width=True, type="primary"):
         st.switch_page("pages/1_QA_Mode.py")
     if not engine_ready:
@@ -97,19 +95,16 @@ with col_qa:
 with col_wiz:
     st.markdown("""
     <div class="bw-mode-card">
-        <div class="mode-icon">📋</div>
-        <h3>Wizard Mode</h3>
+        <div class="bw-mode-card-title-row">
+            <div class="mode-icon">📋</div>
+            <h3>Checklist Mode</h3>
+        </div>
         <p>Step-by-step guided permit review workflows with interactive checklists.
         Export to Word, LAMA CSV, and Bluebeam BAX formats.</p>
-        <div class="bw-mode-card-tags">
-            <span class="bw-tag">Site plan reviews</span>
-            <span class="bw-tag">Subdivision approvals</span>
-            <span class="bw-tag">Stormwater compliance</span>
-        </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-    if st.button("Open Wizard Mode →", key="wiz_btn",
+    if st.button("Open Checklist Mode →", key="wiz_btn",
                  use_container_width=True, type="primary"):
         st.switch_page("pages/2_Wizard_Mode.py")
 
@@ -119,7 +114,7 @@ with st.expander("Quick Start Guide", expanded=False):
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("""
-**Q&A Mode** — direct policy questions
+**Chatbot Mode** — direct policy questions
 - Type your question in plain English
 - Searches all 26 Brentwood engineering documents
 - Answers include footnote citations (¹ ²) to specific code sections
