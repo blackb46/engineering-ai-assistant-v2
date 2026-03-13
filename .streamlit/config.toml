@@ -7,6 +7,11 @@ textColor       = "#1A2332"   # Dark navy — primary text
 font            = "sans serif"
 
 [server]
-headless           = true
-enableCORS         = false
+headless             = true
+enableCORS           = false
 enableXsrfProtection = true
+# Disable file watcher scanning torch internals.
+# Without this, Streamlit 1.43+ crashes scanning torch.classes,
+# requiring torch to be imported at the top of every page file
+# which adds 3-8 seconds of import overhead on every page navigation.
+fileWatcherType = "none"
