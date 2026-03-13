@@ -70,7 +70,7 @@ if not db_info["success"]:
 # ── Mode selection ─────────────────────────────────────────────────────────────
 section_heading("Select a Mode")
 
-col_qa, col_wiz = st.columns(2, gap="large")
+col_qa, col_wiz, col_perf = st.columns(3, gap="large")
 
 with col_qa:
     st.markdown("""
@@ -108,6 +108,23 @@ with col_wiz:
     if st.button("Open Wizard Mode →", key="wiz_btn",
                  use_container_width=True, type="primary"):
         st.switch_page("pages/2_Wizard_Mode.py")
+
+with col_perf:
+    st.markdown("""
+    <div class="bw-mode-card">
+        <div class="mode-icon">⏱️</div>
+        <h3>Performance</h3>
+        <p>Live render timing dashboard. Measures every phase — CSS injection,
+        sidebar, logo, database, and engine — to identify slowdowns.</p>
+        <p style="margin-top:0.6rem;font-size:0.83rem;color:#2F5C9C;font-weight:600;">
+        Phase timings &nbsp;·&nbsp; Cache state &nbsp;·&nbsp; Payload sizes
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+    if st.button("Open Performance →", key="perf_btn",
+                 use_container_width=True):
+        st.switch_page("pages/3_Performance.py")
 
 # ── Quick start ───────────────────────────────────────────────────────────────
 with st.expander("Quick Start Guide", expanded=False):
