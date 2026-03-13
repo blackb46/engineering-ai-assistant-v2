@@ -702,17 +702,19 @@ def render_sidebar(active: str = "home"):
             unsafe_allow_html=True,
         )
 
-        # ── Color crest — st.image() sends image bytes once, browser caches it.
-        # Previously used st.markdown() with a 3.5 MB base64 data URI embedded
-        # in the HTML string — that 3.5 MB went over the websocket on EVERY
-        # render (every button click, every checkbox tick). st.image() sends
-        # the bytes once and the browser reuses its cached copy on rerenders.
-        logo_bytes_sidebar = _logo_bytes(color=True)
-        if logo_bytes_sidebar:
-            # Center the logo using columns trick (st.image has no center option)
-            _lcol, _mcol, _rcol = st.columns([1, 2, 1])
-            with _mcol:
-                st.image(logo_bytes_sidebar, width=120)
+        # ── Color crest via GitHub raw URL ─────────────────────────────────
+        # Using a URL instead of bytes/base64 means the browser fetches and
+        # caches the image by URL. After the first load, 0 bytes are sent
+        # over the websocket for the logo on every subsequent render.
+        # GitHub raw URLs are served from a CDN with cache headers.
+        st.markdown(
+            "<div style='display:flex;justify-content:center;padding:0.4rem 0 0.8rem;'>"
+            "<img src='https://raw.githubusercontent.com/blackb46/engineering-ai-assistant-v2/main/assets/BrentwoodCrestLogo-RGB.png' "
+            "style='width:120px;height:auto;' "
+            "alt='City of Brentwood Seal'>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
         # ── Divider + nav label + version — combined into 1 st.markdown call ──
         # (merging these reduces websocket message count from 11 to 7 per render)
         st.markdown(
@@ -753,12 +755,14 @@ def page_header(title: str, subtitle: str = ""):
     """
     sub_block = f"<p class='subtitle'>{subtitle}</p>" if subtitle else ""
 
-    logo_bytes = _logo_bytes(color=True)
-
-    # Navy header band (no logo embedded — logo rendered via st.image below)
+    # Navy header band — logo served via GitHub URL (browser-cached after first load)
     st.markdown(
         f"""
-        <div class="bw-page-header" style="display:block;padding:1rem 1.5rem 0.8rem;">
+        <div class="bw-page-header">
+            <img src="https://raw.githubusercontent.com/blackb46/engineering-ai-assistant-v2/main/assets/BrentwoodCrestLogo-RGB.png"
+                 style="height:80px;width:auto;flex-shrink:0;
+                        filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));"
+                 alt="City of Brentwood Seal">
             <div style="flex:1;text-align:center;">
                 <h1>{title}</h1>
                 {sub_block}
