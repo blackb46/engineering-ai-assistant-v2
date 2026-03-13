@@ -50,6 +50,14 @@ from typing import Optional
 import streamlit as st
 
 # ChromaDB — our vector database
+# Suppress Streamlit 1.43+ file watcher crash on torch.classes.
+# torch is pulled in by sentence-transformers; this must run before chromadb loads it.
+try:
+    import torch
+    torch.classes.__path__ = []
+except Exception:
+    pass
+
 import chromadb
 from chromadb.utils import embedding_functions
 
