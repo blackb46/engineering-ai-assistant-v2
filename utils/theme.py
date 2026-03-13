@@ -697,9 +697,10 @@ def render_sidebar(active: str = "home"):
         # ── Nav links ───────────────────────────────────────────────────
         st.markdown("<div class='bw-nav-section'>Navigation</div>", unsafe_allow_html=True)
 
-        _nav_link("app.py",                 "Dashboard",    active == "home",   "🏛")
-        _nav_link("pages/1_QA_Mode.py",     "Q&A Mode",     active == "qa",     "🔍")
-        _nav_link("pages/2_Wizard_Mode.py", "Wizard Mode",  active == "wizard", "📋")
+        _nav_link("app.py",                     "Dashboard",    active == "home",   "🏛")
+        _nav_link("pages/1_QA_Mode.py",         "Q&A Mode",     active == "qa",     "🔍")
+        _nav_link("pages/2_Wizard_Mode.py",     "Wizard Mode",  active == "wizard", "📋")
+        _nav_link("pages/3_Performance.py",     "Performance",  active == "perf",   "⏱️")
 
         st.markdown("<hr class='bw-nav-divider'>", unsafe_allow_html=True)
 
