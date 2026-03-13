@@ -321,6 +321,18 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
 .bw-card { background: var(--white) !important; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow-sm); }
 .bw-card-accent { border-left: 4px solid var(--navy); }
 
+/* ── "Select a Mode" heading — larger, more prominent ───────────── */
+.bw-select-mode-heading {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--navy);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 10px;
+    margin: 28px 0 20px;
+    letter-spacing: -0.01em;
+}
+
 /* ── Mode cards ─────────────────────────────────────────────────── */
 .bw-mode-card {
     background: var(--white) !important;
@@ -342,8 +354,27 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 .bw-mode-card:hover { box-shadow: var(--shadow-md); border-color: var(--midblue); transform: translateY(-2px); }
-.bw-mode-card .mode-icon { width: 44px; height: 44px; background: var(--surface-3); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 1.25rem; }
-.bw-mode-card h3 { font-family: var(--font-display) !important; font-size: var(--text-md) !important; font-weight: 700 !important; color: var(--navy) !important; margin: 0 0 8px !important; letter-spacing: -0.01em !important; }
+/* Title row: icon and h3 side by side */
+.bw-mode-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+.bw-mode-card-title-row .mode-icon {
+    width: 44px; height: 44px; flex-shrink: 0;
+    background: var(--surface-3); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem; margin-bottom: 0;
+}
+.bw-mode-card-title-row h3 {
+    font-family: var(--font-display) !important;
+    font-size: 1.2rem !important;
+    font-weight: 700 !important;
+    color: var(--navy) !important;
+    margin: 0 !important;
+    letter-spacing: -0.01em !important;
+}
 .bw-mode-card p { font-size: var(--text-sm) !important; color: var(--text-mid) !important; line-height: 1.6 !important; margin: 0 !important; }
 
 /* ── Answer display ─────────────────────────────────────────────── */
