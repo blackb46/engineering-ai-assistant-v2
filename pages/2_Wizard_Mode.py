@@ -51,6 +51,17 @@ render_sidebar(active="wizard")
 # Wizard-specific CSS: comment boxes, back-to-top button, button active states
 st.markdown("""
 <style>
+    /* ── Step headings (Step 1, Step 2, Step 3) ──────────────────────── */
+    .bw-step-heading {
+        font-family: var(--font-sans);
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #22427C;
+        border-left: 4px solid #F07138;
+        padding: 0.4rem 0 0.4rem 0.75rem;
+        margin: 1.5rem 0 1rem 0;
+        line-height: 1.3;
+    }
     /* ── Checklist section header ─────────────────────────────────────── */
     .bw-section-header {
         background: #EEF2F9 !important;
@@ -544,7 +555,7 @@ def _render_checklist():
         return
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    section_heading(f"Step 2 — {review_type} Checklist")
+    st.markdown(f"<div class='bw-step-heading'>Step 2 — {review_type} Checklist</div>", unsafe_allow_html=True)
 
     checklist     = get_checklist_for_review_type(review_type)
     total_items   = sum(len(s["items"]) for s in checklist.values())
@@ -694,14 +705,14 @@ def main():
     initialize_session_state()
 
     page_header(
-        title="Engineering Review Wizard",
+        title="Engineering Checklist Mode",
         subtitle="Interactive plan review checklist with automatic comment generation",
     )
 
     # =========================================================================
     # STEP 1: PROJECT SETUP
     # =========================================================================
-    section_heading("Step 1 — Project Setup")
+    st.markdown("<div class='bw-step-heading'>Step 1 — Project Setup</div>", unsafe_allow_html=True)
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -788,7 +799,7 @@ def main():
     # STEP 3: REVIEW SUMMARY & EXPORT
     # =========================================================================
     st.markdown("---")
-    st.subheader("📊 Step 3: Review Summary & Export")
+    st.markdown("<div class='bw-step-heading'>📊 Step 3 — Review Summary &amp; Export</div>", unsafe_allow_html=True)
     
     yes_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "Yes")
     no_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "No")
