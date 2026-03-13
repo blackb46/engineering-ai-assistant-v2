@@ -748,29 +748,17 @@ def _nav_link(page: str, label: str, is_active: bool, icon: str = ""):
 def page_header(title: str, subtitle: str = ""):
     """
     Render the standard Brentwood navy page header band with color crest logo.
-    Logo is on the left at 80px; title and subtitle are centered in the band.
-
-    ARGS:
-        title:    Main page title (serif font)
-        subtitle: Smaller subtitle line beneath
+    Uses st.columns + st.image so the logo is never embedded as a base64 string.
+    st.image() sends PNG bytes once; browser caches on subsequent renders.
     """
-    logo_uri = _logo_b64(color=True)
+    sub_block = f"<p class='subtitle'>{subtitle}</p>" if subtitle else ""
 
-    logo_block = (
-        f"<img src='{logo_uri}' style='"
-        f"height:80px;width:auto;flex-shrink:0;"
-        f"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));'"
-        f" alt='City of Brentwood Seal'>"
-    ) if logo_uri else ""
+    logo_bytes = _logo_bytes(color=True)
 
-    sub_block = (
-        f"<p class='subtitle'>{subtitle}</p>"
-    ) if subtitle else ""
-
+    # Navy header band (no logo embedded — logo rendered via st.image below)
     st.markdown(
         f"""
-        <div class="bw-page-header">
-            {logo_block}
+        <div class="bw-page-header" style="display:block;padding:1rem 1.5rem 0.8rem;">
             <div style="flex:1;text-align:center;">
                 <h1>{title}</h1>
                 {sub_block}
