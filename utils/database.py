@@ -43,6 +43,10 @@ VERSION: 2.0
 import json
 import sqlite3
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+# Brentwood, TN — Central Time (handles CST/CDT automatically)
+_CT = ZoneInfo("America/Chicago")
 from pathlib import Path
 from typing import Optional
 
@@ -219,7 +223,7 @@ class AuditLogger:
         RETURNS:
             The new row ID (int), or -1 if logging failed.
         """
-        timestamp      = datetime.now().isoformat()
+        timestamp      = datetime.now(_CT).isoformat()
         sources_json   = json.dumps(sources)   if sources   else "[]"
         citations_json = json.dumps(citations) if citations else "[]"
 
@@ -267,7 +271,7 @@ class AuditLogger:
             doc_ids_involved: List of doc_ids from the retrieved chunks
             query_log_id:     FK to the corresponding query_logs row
         """
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(_CT).isoformat()
         doc_ids_json = json.dumps(doc_ids_involved) if doc_ids_involved else "[]"
 
         try:
@@ -308,7 +312,7 @@ class AuditLogger:
             answer:       The AI answer that was flagged
             user_session: Streamlit session ID
         """
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(_CT).isoformat()
 
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -343,7 +347,7 @@ class AuditLogger:
             user_session:    Streamlit session ID
             completion_time: Seconds from start to finish
         """
-        timestamp      = datetime.now().isoformat()
+        timestamp      = datetime.now(_CT).isoformat()
         data_json      = json.dumps(data)      if data      else "{}"
         checklist_json = json.dumps(checklist) if checklist else "[]"
 
@@ -526,7 +530,7 @@ class AuditLogger:
                 satisfaction_rate, abstention_rate, discrepancy_rate
         """
         try:
-            cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+            cutoff = (datetime.now(_CT) - timedelta(days=days)).isoformat()
 
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -614,7 +618,7 @@ class AuditLogger:
             Empty string if no records or on error.
         """
         try:
-            cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+            cutoff = (datetime.now(_CT) - timedelta(days=days)).isoformat()
 
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
