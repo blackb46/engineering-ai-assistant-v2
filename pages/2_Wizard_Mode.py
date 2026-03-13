@@ -2,11 +2,12 @@
 2_Wizard_Mode.py
 ================
 City of Brentwood Engineering AI Assistant - V2
-Checklist Mode — interactive plan review checklist with export.
+Wizard Mode — interactive plan review checklist with export.
 """
 
 import streamlit as st
 import sys
+import re
 import csv
 import zlib
 import random
@@ -41,7 +42,7 @@ try:
 except ImportError:
     DOCX_AVAILABLE = False
 
-st.set_page_config(page_title="Checklist Mode — Brentwood Engineering AI",
+st.set_page_config(page_title="Wizard Mode — Brentwood Engineering AI",
                    page_icon=get_favicon(), layout="wide")
 
 apply_theme()
@@ -61,35 +62,6 @@ st.markdown("""
         font-weight: 700;
         letter-spacing: 0.02em;
         border-radius: 0 6px 6px 0;
-    }
-
-    /* ── Step headings (Step 1, Step 2, Step 3) — prominent and bold ──── */
-    .bw-step-heading {
-        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #22427C;
-        border-bottom: 3px solid #F07138;
-        padding-bottom: 0.55rem;
-        margin: 2.2rem 0 1.1rem;
-        letter-spacing: -0.02em;
-    }
-
-    /* ── Expander labels — section titles large and bold ──────────────── */
-    [data-testid="stExpander"] summary {
-        font-size: 1.15rem !important;
-        font-weight: 700 !important;
-        color: #22427C !important;
-        padding: 16px 18px !important;
-        letter-spacing: -0.01em !important;
-    }
-    [data-testid="stExpander"] summary:hover {
-        background: #EEF2F9 !important;
-    }
-    [data-testid="stExpander"] summary p {
-        font-size: 1.15rem !important;
-        font-weight: 700 !important;
-        color: #22427C !important;
     }
     /* ── Comment box (shown when No selected) ────────────────────────── */
     .bw-comment-box {
@@ -572,7 +544,7 @@ def _render_checklist():
         return
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown(f"<div class='bw-step-heading'>Step 2 — {review_type} Checklist</div>", unsafe_allow_html=True)
+    section_heading(f"Step 2 — {review_type} Checklist")
 
     checklist     = get_checklist_for_review_type(review_type)
     total_items   = sum(len(s["items"]) for s in checklist.values())
@@ -587,6 +559,14 @@ def _render_checklist():
     if "wizard_open_section" not in st.session_state:
         st.session_state.wizard_open_section = list(checklist.keys())[0]
 
+    # Sequential display counters — these control what numbers the user SEES.
+    # The internal item["id"] values (e.g. "6.3", "16.2") never change because
+    # they are used as session state keys, comment lookups, and export labels.
+    # We simply replace the hard-coded numbers in the display with a clean
+    # 1, 2, 3… for sections and 1.1, 1.2… for items so there are never gaps
+    # caused by deleted items or permit-type filtering.
+    display_section_num = 0
+
     for section_id, section_data in checklist.items():
         section_items = section_data["items"]
         section_done  = sum(
@@ -596,18 +576,34 @@ def _render_checklist():
         section_total = len(section_items)
         all_done      = section_done == section_total
 
+        # Increment the visible section number for each section that appears
+        display_section_num += 1
+
+        # Strip the original hard-coded number from the section name
+        # e.g. "6. Retaining Walls" → "Retaining Walls", then prepend display num
+        raw_name = section_data["name"]
+        # Remove leading digits and period/dot if present (e.g. "6. " or "16. ")
+        clean_name = re.sub(r'^\d+\.\s*', '', raw_name)
+        display_section_name = f"{display_section_num}. {clean_name}"
+
         status_icon     = "✅" if all_done else "📋"
         expander_label  = (
-            f"{status_icon} {section_data['name']}  "
+            f"{status_icon} {display_section_name}  "
             f"({section_done}/{section_total} reviewed)"
         )
 
         default_open = (section_id == st.session_state.wizard_open_section)
 
         with st.expander(expander_label, expanded=default_open):
+            # Sequential item counter resets for each section: 1.1, 1.2, 1.3…
+            display_item_num = 0
+
             for item in section_items:
                 item_key       = item["id"]
                 current_status = st.session_state.wizard_checklist_state.get(item_key, "—")
+
+                display_item_num += 1
+                display_item_label = f"{display_section_num}.{display_item_num}"
 
                 # ── Item row: description + Yes / No / N/A buttons ────────────
                 desc_col, yes_col, no_col, na_col = st.columns([5, 1, 1, 1])
@@ -615,7 +611,7 @@ def _render_checklist():
                 with desc_col:
                     st.markdown(
                         f"<div style='padding:0.4rem 0;font-size:0.93rem;'>"
-                        f"<strong style='color:#22427C'>{item['id']}</strong>"
+                        f"<strong style='color:#22427C'>{display_item_label}</strong>"
                         f" — {item['description']}</div>",
                         unsafe_allow_html=True
                     )
@@ -694,18 +690,18 @@ def _render_checklist():
 
 
 def main():
-    """Main function for Checklist Mode"""
+    """Main function for Wizard Mode"""
     initialize_session_state()
 
     page_header(
-        title="Engineering Checklist Mode",
+        title="Engineering Review Wizard",
         subtitle="Interactive plan review checklist with automatic comment generation",
     )
 
     # =========================================================================
     # STEP 1: PROJECT SETUP
     # =========================================================================
-    st.markdown("<div class='bw-step-heading'>Step 1 — Project Setup</div>", unsafe_allow_html=True)
+    section_heading("Step 1 — Project Setup")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -792,7 +788,7 @@ def main():
     # STEP 3: REVIEW SUMMARY & EXPORT
     # =========================================================================
     st.markdown("---")
-    st.markdown("<div class='bw-step-heading'>Step 3 — Review Summary &amp; Export</div>", unsafe_allow_html=True)
+    st.subheader("📊 Step 3: Review Summary & Export")
     
     yes_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "Yes")
     no_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "No")
@@ -895,7 +891,7 @@ def main():
     # Quick copy section for comments
     if has_comments:
         st.markdown("---")
-        st.markdown("<div class='bw-step-heading'>Quick Copy — All Comments</div>", unsafe_allow_html=True)
+        st.subheader("📋 Quick Copy - All Comments")
         st.caption("Copy these comments directly into Bluebeam or your permit system:")
         
         all_comments = []
@@ -937,7 +933,7 @@ def main():
         if st.button("🏠 Home"):
             st.switch_page("app.py")
     with col2:
-        if st.button("💬 Chatbot Mode"):
+        if st.button("💬 Q&A Mode"):
             st.switch_page("pages/1_QA_Mode.py")
 
 
