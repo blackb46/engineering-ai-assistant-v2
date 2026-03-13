@@ -840,7 +840,7 @@ def main():
             if st.button("📄 Generate Word Document", type="primary", use_container_width=True):
                 if not st.session_state.wizard_permit_number:
                     st.error("Please enter a permit number before exporting.")
-                elif completed_items == 0:
+                elif len(st.session_state.wizard_checklist_state) == 0:
                     st.error("Please review at least one item before exporting.")
                 else:
                     doc_buffer = generate_word_document()
