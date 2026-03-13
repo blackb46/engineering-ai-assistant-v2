@@ -83,7 +83,7 @@ render_num = st.session_state.render_count
 # ═════════════════════════════════════════════════════════════════════════════
 timer.begin("theme_import")
 try:
-    from theme import apply_theme, render_sidebar, get_favicon, _logo_b64, _LOGO_CACHE
+    from theme import apply_theme, render_sidebar, get_favicon, _logo_bytes, _LOGO_CACHE
     theme_imported = True
 except Exception as e:
     theme_imported = False
@@ -118,10 +118,11 @@ except Exception as e:
     favicon_cached = False
 favicon_ms = timer.end()
 
-timer.begin("_logo_b64() call")
+timer.begin("_logo_bytes() call")
 try:
     if theme_imported:
-        logo = _logo_b64(color=True)
+        from theme import _logo_bytes
+        logo = _logo_bytes(color=True)
         logo_len = len(logo) if logo else 0
 except Exception as e:
     logo_len = 0
