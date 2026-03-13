@@ -80,9 +80,11 @@ with col_qa:
         <p>Ask natural language questions about engineering policy. Answers are
         grounded in the Municipal Code and Engineering Policy Manual with
         precise footnote citations.</p>
-        <p style="margin-top:0.6rem;font-size:0.83rem;color:#2F5C9C;font-weight:600;">
-        Policy lookups &nbsp;·&nbsp; Setback requirements &nbsp;·&nbsp; Design standards
-        </p>
+        <div class="bw-mode-card-tags">
+            <span class="bw-tag">Policy lookups</span>
+            <span class="bw-tag">Setback requirements</span>
+            <span class="bw-tag">Design standards</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
@@ -99,9 +101,11 @@ with col_wiz:
         <h3>Wizard Mode</h3>
         <p>Step-by-step guided permit review workflows with interactive checklists.
         Export to Word, LAMA CSV, and Bluebeam BAX formats.</p>
-        <p style="margin-top:0.6rem;font-size:0.83rem;color:#2F5C9C;font-weight:600;">
-        Site plan reviews &nbsp;·&nbsp; Subdivision approvals &nbsp;·&nbsp; Stormwater compliance
-        </p>
+        <div class="bw-mode-card-tags">
+            <span class="bw-tag">Site plan reviews</span>
+            <span class="bw-tag">Subdivision approvals</span>
+            <span class="bw-tag">Stormwater compliance</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
