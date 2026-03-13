@@ -42,7 +42,7 @@ COMMENTS = {
     
     "BB-0012": "Provide revised plan set in compliance with all elements of the Hillside Protection provided in the City of Brentwood Zoning Code Chapter 78, Article 3, Division 14.",
     
-    "BB-0013": "Provide revised plan set in compliance with all elements of the Transitional Lot Checklist.",
+    "BB-0013": "Provide revised plan set in compliance with all elements of the Transitional Lot Checklist. The transitional lot checklist can be found at the following link: https://www.brentwoodtn.gov/files/assets/city/v/1/engineering/jc-files/transitional-lot-checklist-071224.pdf",
     
     "BB-0014": "This review is only for the grading. The pool decking review will be required by the Building and Codes department. Building and Codes to confirm this will not be required with their review of the submittal.",
     
@@ -324,6 +324,24 @@ c. Sight distance limitations. No fence shall be placed on private property near
     "BB-0131": "Provide bearings and distances on all property lines.",
     
     "BB-0132": "Temporary construction entrance: ASTM #1 stone with filter fabric underneath. Minimum dimensions: 12' W x 30' L (acceptable for single lot).",
+
+    # NEW COMMENTS (BB-0133 through BB-0148) — added March 2026
+    "BB-0133": "Adjust fence location on plans to show no encroachment into a PUDE",
+    "BB-0134": "Fences shall not be installed such that sight distance is impaired. Provide horizontal and vertical sight distance measurements for all traffic movements and stopping sight distances within the area consistent with AASHTO policy",
+    "BB-0135": "Tree plantings, especially large species, are not allowed within a Public Utility and Drainage Easement (PUDE). The only trees permitted within a PUDE shall be small ornamental species that can be removed using light equipment (e.g., skid steer or similar) without excavation that could impact underground utilities.",
+    "BB-0136": "Coordinate with utility provider to determine proper gate locations and requirements for access to easement.",
+    "BB-0137": "The proposed fence must be relocated such that the drainage swale is located outside the proposed fence line.",
+    "BB-0138": "The maximum allowed encroachment into a PUDE if there is no existing swale is 5-feet.",
+    "BB-0139": "The maximum allowable retaining wall height is 10' inside buildable area, 6' outside (measured on exposed face)",
+    "BB-0140": "Provide the stamped engineered retaining wall design with resubmittal.",
+    "BB-0141": "Provide the following note on the plans: All retaining walls greater than 4-ft will be designed and inspected by a licensed professional engineer and certified in writing prior to issuance of a Certificate of Occupancy",
+    "BB-0142": "All walls with 30-inches or more in grade difference require a code compliant barrier.",
+    "BB-0143": "Provide a tree survey of the lot showing location, diameter, and species of all trees on site to be removed and trees to remain. For all trees to remain, provide adequate tree protection fencing located at 1.5 times the radius of the drip line.",
+    "BB-0144": "Label all trees on site to be removed and those to be saved. For trees to be saved within 50 feet of limits of disturbance, provide tree protection fencing.",
+    "BB-0145": "Adjust fence location on plans to show no encroachment into a PUDE",
+    "BB-0146": "Adjust pool deck to stay completely within the setbacks",
+    "BB-0147": "Show all lot line swales with proposed contours ensuring minimum swale dimensions are provided and provide flow arrows with slope percentages within swale.",
+    "BB-0148": "Provide a note on the plans stating: All driveways with 15% or greater longitudinal slopes and/or 5% or greater cross-slopes shall be profiled and sectioned by a TN R.L.S. and approved by the City Engineer prior to issuance of a certificate of occupancy.",
 }
 
 

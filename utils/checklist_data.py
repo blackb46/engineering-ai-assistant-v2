@@ -172,14 +172,20 @@ CHECKLIST_SECTIONS = {
             {
                 "id": "2.1",
                 "description": "Silt fence detail (TDEC approved)",
-                "comment_ids": ["BB-0062", "BB-0025"],
+                "comment_ids": ["BB-0062"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
             {
                 "id": "2.2",
                 "description": "Temporary construction entrance (12'W x 30'L, ASTM #1 stone, filter fabric)",
-                "comment_ids": ["BB-0064", "BB-0132", "BB-0054"],
-                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
+                "comment_ids": ["BB-0132"],
+                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot"]
+            },
+            {
+                "id": "2.2",
+                "description": "Temporary construction entrance (12'W x 30'L, ASTM #1 stone, filter fabric)",
+                "comment_ids": ["BB-0132", "BB-0064", "BB-0054"],
+                "applies_to": ["Pool Permit"]
             },
             {
                 "id": "2.3",
@@ -190,7 +196,7 @@ CHECKLIST_SECTIONS = {
             {
                 "id": "2.4",
                 "description": "Retaining wall detail (if applicable) stamped by PE",
-                "comment_ids": ["BB-0061", "BB-0036"],
+                "comment_ids": ["BB-0061"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
             {
@@ -354,7 +360,7 @@ CHECKLIST_SECTIONS = {
             {
                 "id": "6.1",
                 "description": "Max height 10' inside buildable area, 6' outside (measured on exposed face)",
-                "comment_ids": ["BB-0036"],
+                "comment_ids": ["BB-0139"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
             {
@@ -362,13 +368,13 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "Walls 4'+ require PE-stamped design (per code sec. 78-14)"
                 # "require" ambiguous — now confirms the design is provided
                 "description": "PE-stamped design provided for walls 4'+ (per Sec. 78-14)",
-                "comment_ids": ["BB-0036", "BB-0041"],
+                "comment_ids": ["BB-0140"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
             {
                 "id": "6.3",
-                "description": "Retaining wall design detail shown on plan",
-                "comment_ids": ["BB-0061"],
+                "description": "Top and Bottom elevations provided for proposed retaining wall on plans",
+                "comment_ids": ["BB-0036"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
             {
@@ -376,23 +382,15 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "Note that walls >4' must be inspected by licensed PE"
                 # "must be inspected" describes a requirement, not compliance
                 "description": "PE inspection note provided for walls >4'",
-                "comment_ids": ["BB-0041"],
+                "comment_ids": ["BB-0141"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
             {
                 "id": "6.5",
                 # REVISED: Was "Guard rails/fencing required for grade change >30\" (attached to house)"
                 # "required" ambiguous — now confirms they are provided
-                "description": "Guard rails/fencing provided for grade change >30\" (attached to house)",
-                "comment_ids": ["BB-0036", "BB-0102"],
-                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
-            },
-            {
-                "id": "6.6",
-                # REVISED: Was "Guard rails, fencing, or planted hedging for walls detached from house (>30\")"
-                # Added "provided" to confirm compliance
-                "description": "Guard rails, fencing, or planted hedging provided for detached walls (>30\" grade change)",
-                "comment_ids": ["BB-0036", "BB-0102"],
+                "description": "Guard rails/fencing provided for grade change >30-inches",
+                "comment_ids": ["BB-0142", "BB-0102"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
         ]
@@ -408,7 +406,13 @@ CHECKLIST_SECTIONS = {
                 "id": "7.1",
                 "description": "Drainage infrastructure designed by PE per Article 6.10 of Subdivision Regulations",
                 "comment_ids": ["BB-0027", "BB-0080"],
-                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
+                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot"]
+            },
+            {
+                "id": "7.1",
+                "description": "Drainage infrastructure designed by PE per Article 6.10 of Subdivision Regulations",
+                "comment_ids": ["BB-0027"],
+                "applies_to": ["Pool Permit"]
             },
             {
                 "id": "7.2",
@@ -427,7 +431,7 @@ CHECKLIST_SECTIONS = {
             {
                 "id": "7.4",
                 "description": "Lot line swales designed and shown via contours or arrows",
-                "comment_ids": ["BB-0042", "BB-0043"],
+                "comment_ids": ["BB-0147", "BB-0043"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
             },
             {
@@ -479,7 +483,13 @@ CHECKLIST_SECTIONS = {
                 "id": "8.3",
                 "description": "Construction entrance detail with ROW protection notes",
                 "comment_ids": ["BB-0064", "BB-0054"],
-                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
+                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot"]
+            },
+            {
+                "id": "8.3",
+                "description": "Construction entrance detail with ROW protection notes",
+                "comment_ids": ["BB-0054"],
+                "applies_to": ["Pool Permit"]
             },
             {
                 "id": "8.4",
@@ -518,7 +528,13 @@ CHECKLIST_SECTIONS = {
                 "id": "9.3",
                 "description": "Tree protection detail (1.5 times drip line)",
                 "comment_ids": ["BB-0040"],
-                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot", "Pool Permit"]
+                "applies_to": ["Transitional Lot", "Hillside Protection Lot", "Standard Lot"]
+            },
+            {
+                "id": "9.3",
+                "description": "Tree protection detail (1.5 times drip line)",
+                "comment_ids": ["BB-0143", "BB-0144"],
+                "applies_to": ["Pool Permit"]
             },
             {
                 "id": "9.4",
@@ -647,7 +663,7 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "Driveway as-built survey note (for driveways over 15% slope)"
                 # Added "provided" and used >= symbol for clarity
                 "description": "Driveway as-built survey note provided (if slope >=15%)",
-                "comment_ids": ["BB-0041"],
+                "comment_ids": ["BB-0148"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot"]
             },
         ]
@@ -680,7 +696,7 @@ CHECKLIST_SECTIONS = {
             {
                 "id": "14.4",
                 "description": "Transitional lot checklist completed and submitted",
-                "comment_ids": ["BB-0085", "BB-0086", "BB-0087"],
+                "comment_ids": ["BB-0085", "BB-0086"],
                 "applies_to": ["Transitional Lot", "Hillside Protection Lot"]
             },
             {
@@ -725,7 +741,7 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "Pool fence location - not in PUDE or along property line issues"
                 # Double confusing: "not in" + "issues"
                 "description": "Pool fence clear of PUDE and property line conflicts",
-                "comment_ids": ["BB-0017", "BB-0122", "BB-0123"],
+                "comment_ids": ["BB-0145", "BB-0017", "BB-0123"],
                 "applies_to": ["Pool Permit"]
             },
             {
@@ -745,13 +761,7 @@ CHECKLIST_SECTIONS = {
             {
                 "id": "15.6",
                 "description": "Pool and decking shown within setbacks",
-                "comment_ids": ["BB-0063", "BB-0093"],
-                "applies_to": ["Pool Permit"]
-            },
-            {
-                "id": "15.7",
-                "description": "Setbacks correct per approved plat",
-                "comment_ids": ["BB-0078"],
+                "comment_ids": ["BB-0146", "BB-0093"],
                 "applies_to": ["Pool Permit"]
             },
             {
@@ -822,7 +832,7 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "Fence not in recorded easement without authorization"
                 # Triple confusion: "not" + "without"
                 "description": "Fence clear of recorded easements (or authorization obtained)",
-                "comment_ids": ["BB-0122", "BB-0017"],
+                "comment_ids": ["BB-0133", "BB-0122", "BB-0017"],
                 "applies_to": ["Fence Permit"]
             },
             {
@@ -830,12 +840,12 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "Fence does not create sight distance issues"
                 # "Yes, it does not create issues" is a double negative
                 "description": "Sight distance verified at intersections and driveways",
-                "comment_ids": ["BB-0122"],
+                "comment_ids": ["BB-0134"],
                 "applies_to": ["Fence Permit"]
             },
             {
                 "id": "16.4",
-                "description": "Fence location relative to PUDE reviewed",
+                "description": "Fence encroachment into PUDE?",
                 "comment_ids": ["BB-0017", "BB-0123"],
                 "applies_to": ["Fence Permit"]
             },
@@ -844,13 +854,13 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "No trees planted in easements"
                 # "Yes, there are no trees" is unintuitive
                 "description": "Easements clear of proposed tree plantings",
-                "comment_ids": ["BB-0113"],
+                "comment_ids": ["BB-0135"],
                 "applies_to": ["Fence Permit"]
             },
             {
                 "id": "16.6",
                 "description": "Fence over utility easement has proper gate for access",
-                "comment_ids": ["BB-0123"],
+                "comment_ids": ["BB-0136"],
                 "applies_to": ["Fence Permit"]
             },
             {
@@ -858,13 +868,13 @@ CHECKLIST_SECTIONS = {
                 # REVISED: Was "Fence does not encompass drainage swale"
                 # "Yes, it does not encompass" is a double negative
                 "description": "Drainage swale remains outside fence line",
-                "comment_ids": ["BB-0123"],
+                "comment_ids": ["BB-0137"],
                 "applies_to": ["Fence Permit"]
             },
             {
                 "id": "16.8",
                 "description": "Maximum 5' encroachment if no existing swale",
-                "comment_ids": ["BB-0123"],
+                "comment_ids": ["BB-0138"],
                 "applies_to": ["Fence Permit"]
             },
         ]
