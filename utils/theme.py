@@ -726,7 +726,9 @@ def render_sidebar(active: str = "home"):
         _nav_link("app.py",                     "Dashboard",    active == "home",   "🏛")
         _nav_link("pages/1_QA_Mode.py",         "Q&A Mode",     active == "qa",     "🔍")
         _nav_link("pages/2_Wizard_Mode.py",     "Wizard Mode",  active == "wizard", "📋")
-        _nav_link("pages/3_Performance.py",     "Performance",  active == "perf",   "⏱️")
+        # Performance profiler hidden from nav — file kept in repo at pages/3_Performance.py
+        # To re-enable: uncomment the line below and redeploy
+        # _nav_link("pages/3_Performance.py",   "Performance",  active == "perf",   "⏱️")
 
         st.markdown(
             f"<hr class='bw-nav-divider'>"
