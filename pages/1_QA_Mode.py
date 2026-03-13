@@ -88,6 +88,19 @@ def _display_citations(citations: list):
         num  = c.get("number", 1)
         sup  = superscripts[num - 1] if num <= len(superscripts) else str(num)
         text = c.get("formatted", c.get("source_citation", "Unknown source"))
+        # Truncate citations that accidentally contain section body text
+        # (happens when zoning chunks have long source_citation fields).
+        # Split at semicolons/periods that follow a section number pattern,
+        # and cap at 160 chars to keep the source box clean.
+        if len(text) > 160:
+            # Keep up to first sentence-ending after a reasonable length
+            cut = text[:160]
+            for sep in [". A", ". T", ". Any", "; A", "; T"]:
+                idx = cut.find(sep)
+                if idx > 60:
+                    cut = cut[:idx]
+                    break
+            text = cut.rstrip(".,; ") + "…"
         items_html += (
             f"<li>"
             f"<span style='display:inline-block;min-width:1.4rem;"
@@ -182,7 +195,7 @@ def main():
             st.session_state.show_feedback_form = False
             st.session_state.feedback_submitted = False
 
-            with st.spinner("Searching Brentwood engineering documents..."):
+            with st.spinner("Searching Brentwood Documents..."):
                 try:
                     result = engine.query(question)
                     st.session_state.current_result   = result

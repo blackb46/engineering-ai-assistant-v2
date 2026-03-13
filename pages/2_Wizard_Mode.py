@@ -47,30 +47,22 @@ st.set_page_config(page_title="Wizard Mode — Brentwood Engineering AI",
 apply_theme()
 render_sidebar(active="wizard")
 
-# Extra CSS for wizard-specific elements (dark-mode safe)
+# Wizard-specific CSS: comment boxes, back-to-top button, button active states
 st.markdown("""
 <style>
+    /* ── Checklist section header ─────────────────────────────────────── */
     .bw-section-header {
         background: #EEF2F9 !important;
         color: #22427C !important;
         padding: 0.65rem 1rem;
         border-left: 4px solid #F07138;
         margin: 1.2rem 0 0.5rem 0;
-        font-family: 'Barlow Condensed', sans-serif;
         font-size: 0.97rem;
         font-weight: 700;
         letter-spacing: 0.02em;
         border-radius: 0 6px 6px 0;
     }
-    .bw-checklist-item {
-        background: #FFFFFF !important;
-        color: #1A2332 !important;
-        border: 1px solid #DDE3EC;
-        border-radius: 6px;
-        padding: 0.7rem 1rem;
-        margin: 0.4rem 0;
-        font-family: 'Barlow', sans-serif;
-    }
+    /* ── Comment box (shown when No selected) ────────────────────────── */
     .bw-comment-box {
         background: #FFFBF0 !important;
         color: #1A2332 !important;
@@ -80,7 +72,6 @@ st.markdown("""
         padding: 0.75rem 1rem;
         margin: 0.4rem 0 0.4rem 1.5rem;
         font-size: 0.9em;
-        font-family: 'Barlow', sans-serif;
     }
     .bw-resubmittal-box {
         background: #EEF2F9 !important;
@@ -89,7 +80,6 @@ st.markdown("""
         border-radius: 8px;
         padding: 1rem 1.2rem;
         margin: 1rem 0;
-        font-family: 'Barlow', sans-serif;
     }
     .bw-export-section {
         background: #F0FDF4 !important;
@@ -99,13 +89,42 @@ st.markdown("""
         border-radius: 8px;
         padding: 1rem 1.2rem;
         margin: 1rem 0;
-        font-family: 'Barlow', sans-serif;
     }
-    .status-yes { color: #16A34A !important; font-weight: 700; }
-    .status-no  { color: #DC2626 !important; font-weight: 700; }
-    .status-na  { color: #64748B !important; font-weight: 700; }
-    div[data-testid="stRadio"] > div { gap: 0.5rem; }
+    /* ── Back-to-top floating button ─────────────────────────────────── */
+    #btt-btn {
+        position: fixed;
+        bottom: 2.5rem;
+        right: 2rem;
+        z-index: 9999;
+        background: #22427C;
+        color: white !important;
+        border: none;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        font-size: 1.3rem;
+        line-height: 44px;
+        text-align: center;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(34,66,124,0.35);
+        opacity: 0;
+        transition: opacity 0.25s;
+        text-decoration: none;
+    }
+    #btt-btn.visible { opacity: 1; }
+    #btt-btn:hover { background: #2F5C9C !important; }
 </style>
+<!-- Back-to-top anchor + button -->
+<div id="page-top"></div>
+<a id="btt-btn" href="#page-top" title="Back to top">↑</a>
+<script>
+    window.addEventListener('scroll', function() {
+        var btn = document.getElementById('btt-btn');
+        if (btn) {
+            btn.classList.toggle('visible', window.scrollY > 300);
+        }
+    }, {passive: true});
+</script>
 """, unsafe_allow_html=True)
 
 def initialize_session_state():
@@ -510,6 +529,140 @@ def generate_bluebeam_bax():
     return b'\xef\xbb\xbf' + bax_crlf.encode('utf-8')
 
 
+@st.fragment
+def _render_checklist():
+    """
+    Checklist + resubmittal section as a st.fragment.
+
+    st.fragment causes ONLY this section to rerender when a Yes/No/NA button
+    is clicked. The page header, sidebar, CSS injection, and Step 3 summary
+    do NOT rerender — button clicks feel instantaneous.
+    """
+    review_type = st.session_state.wizard_review_type
+    if not review_type:
+        return
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+    section_heading(f"Step 2 — {review_type} Checklist")
+
+    checklist     = get_checklist_for_review_type(review_type)
+    total_items   = sum(len(s["items"]) for s in checklist.values())
+    completed_items = len(st.session_state.wizard_checklist_state)
+
+    st.progress(completed_items / total_items if total_items > 0 else 0)
+    st.caption(f"Progress: {completed_items} of {total_items} items reviewed")
+
+    # ── Sections as collapsed expanders ───────────────────────────────────
+    # wizard_open_section tracks which section the user last clicked in,
+    # so the expander stays open after a button press.
+    if "wizard_open_section" not in st.session_state:
+        st.session_state.wizard_open_section = list(checklist.keys())[0]
+
+    for section_id, section_data in checklist.items():
+        section_items = section_data["items"]
+        section_done  = sum(
+            1 for it in section_items
+            if it["id"] in st.session_state.wizard_checklist_state
+        )
+        section_total = len(section_items)
+        all_done      = section_done == section_total
+
+        status_icon     = "✅" if all_done else "📋"
+        expander_label  = (
+            f"{status_icon} {section_data['name']}  "
+            f"({section_done}/{section_total} reviewed)"
+        )
+
+        default_open = (section_id == st.session_state.wizard_open_section)
+
+        with st.expander(expander_label, expanded=default_open):
+            for item in section_items:
+                item_key       = item["id"]
+                current_status = st.session_state.wizard_checklist_state.get(item_key, "—")
+
+                # ── Item row: description + Yes / No / N/A buttons ────────────
+                desc_col, yes_col, no_col, na_col = st.columns([5, 1, 1, 1])
+
+                with desc_col:
+                    st.markdown(
+                        f"<div style='padding:0.4rem 0;font-size:0.93rem;'>"
+                        f"<strong style='color:#22427C'>{item['id']}</strong>"
+                        f" — {item['description']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                with yes_col:
+                    def _set_yes(k=item_key, s=section_id):
+                        st.session_state.wizard_checklist_state[k] = "Yes"
+                        st.session_state.wizard_selected_comments.pop(k, None)
+                        st.session_state.wizard_open_section = s
+                    yes_type = "primary" if current_status == "Yes" else "secondary"
+                    st.button("✓ Yes", key=f"yes_{item_key}", type=yes_type,
+                              use_container_width=True, on_click=_set_yes)
+
+                with no_col:
+                    def _set_no(k=item_key, s=section_id):
+                        st.session_state.wizard_checklist_state[k] = "No"
+                        st.session_state.wizard_open_section = s
+                    no_type = "primary" if current_status == "No" else "secondary"
+                    st.button("✗ No", key=f"no_{item_key}", type=no_type,
+                              use_container_width=True, on_click=_set_no)
+
+                with na_col:
+                    def _set_na(k=item_key, s=section_id):
+                        st.session_state.wizard_checklist_state[k] = "N/A"
+                        st.session_state.wizard_selected_comments.pop(k, None)
+                        st.session_state.wizard_open_section = s
+                    na_type = "primary" if current_status == "N/A" else "secondary"
+                    st.button("N/A", key=f"na_{item_key}", type=na_type,
+                              use_container_width=True, on_click=_set_na)
+
+                # ── Comment panel (only when No selected) ─────────────────────
+                if st.session_state.wizard_checklist_state.get(item_key) == "No":
+                    with st.container():
+                        st.markdown('<div class="bw-comment-box">', unsafe_allow_html=True)
+                        st.markdown("**📝 Select applicable comments:**")
+
+                        comment_ids = item.get("comment_ids", [])
+                        if comment_ids:
+                            if item_key not in st.session_state.wizard_selected_comments:
+                                st.session_state.wizard_selected_comments[item_key] = []
+
+                            for comment_id in comment_ids:
+                                comment_text = COMMENTS.get(comment_id, "Comment not found")
+                                display_text = comment_text[:150] + "..." if len(comment_text) > 150 else comment_text
+                                is_selected  = comment_id in st.session_state.wizard_selected_comments[item_key]
+
+                                if st.checkbox(
+                                    f"**{comment_id}**: {display_text}",
+                                    value=is_selected,
+                                    key=f"comment_{item_key}_{comment_id}"
+                                ):
+                                    if comment_id not in st.session_state.wizard_selected_comments[item_key]:
+                                        st.session_state.wizard_selected_comments[item_key].append(comment_id)
+                                else:
+                                    if comment_id in st.session_state.wizard_selected_comments[item_key]:
+                                        st.session_state.wizard_selected_comments[item_key].remove(comment_id)
+
+                                if len(comment_text) > 150:
+                                    with st.expander("View full comment"):
+                                        st.write(comment_text)
+
+                        st.markdown("**✏️ Custom notes (optional):**")
+                        custom_note = st.text_area(
+                            "Custom note",
+                            value=st.session_state.wizard_custom_notes.get(item_key, ""),
+                            key=f"custom_{item_key}",
+                            height=80,
+                            label_visibility="collapsed",
+                            placeholder="Add any additional comments specific to this review..."
+                        )
+                        st.session_state.wizard_custom_notes[item_key] = custom_note
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+                st.markdown("---")
+
+
 def main():
     """Main function for Wizard Mode"""
     initialize_session_state()
@@ -571,94 +724,12 @@ def main():
     
     # =========================================================================
     # STEP 2: INTERACTIVE CHECKLIST
+    # Wrapped in @st.fragment so only this section rerenders on button clicks.
+    # Sections are st.expanders (collapsed by default) — only the active section
+    # renders its items, keeping the widget count low.
     # =========================================================================
-    st.markdown("<hr>", unsafe_allow_html=True)
-    section_heading(f"Step 2 — {st.session_state.wizard_review_type} Checklist")
-    
-    checklist = get_checklist_for_review_type(st.session_state.wizard_review_type)
-    
-    total_items = sum(len(section["items"]) for section in checklist.values())
-    completed_items = len(st.session_state.wizard_checklist_state)
-    
-    st.progress(completed_items / total_items if total_items > 0 else 0)
-    st.caption(f"Progress: {completed_items} of {total_items} items reviewed")
-    
-    # Display checklist by section
-    for section_id, section_data in checklist.items():
-        st.markdown(f'<div class="bw-section-header">{section_data["name"]}</div>', unsafe_allow_html=True)
-        
-        for item in section_data["items"]:
-            item_key = item["id"]
-            
-            col1, col2 = st.columns([3, 1])
-            
-            with col1:
-                st.markdown(f"**{item['id']}** - {item['description']}")
-            
-            with col2:
-                current_status = st.session_state.wizard_checklist_state.get(item_key, "—")
-                
-                status = st.radio(
-                    f"Status for {item_key}",
-                    options=["—", "Yes", "No", "N/A"],
-                    index=["—", "Yes", "No", "N/A"].index(current_status) if current_status in ["—", "Yes", "No", "N/A"] else 0,
-                    key=f"status_{item_key}",
-                    horizontal=True,
-                    label_visibility="collapsed"
-                )
-                
-                if status and status != "—":
-                    st.session_state.wizard_checklist_state[item_key] = status
-                elif item_key in st.session_state.wizard_checklist_state:
-                    del st.session_state.wizard_checklist_state[item_key]
-            
-            # If "No" is selected, show comment options
-            if st.session_state.wizard_checklist_state.get(item_key) == "No":
-                with st.container():
-                    st.markdown('<div class="bw-comment-box">', unsafe_allow_html=True)
-                    st.markdown("**📝 Select applicable comments:**")
-                    
-                    comment_ids = item.get("comment_ids", [])
-                    
-                    if comment_ids:
-                        if item_key not in st.session_state.wizard_selected_comments:
-                            st.session_state.wizard_selected_comments[item_key] = []
-                        
-                        for comment_id in comment_ids:
-                            comment_text = COMMENTS.get(comment_id, "Comment not found")
-                            display_text = comment_text[:150] + "..." if len(comment_text) > 150 else comment_text
-                            is_selected = comment_id in st.session_state.wizard_selected_comments[item_key]
-                            
-                            if st.checkbox(
-                                f"**{comment_id}**: {display_text}",
-                                value=is_selected,
-                                key=f"comment_{item_key}_{comment_id}"
-                            ):
-                                if comment_id not in st.session_state.wizard_selected_comments[item_key]:
-                                    st.session_state.wizard_selected_comments[item_key].append(comment_id)
-                            else:
-                                if comment_id in st.session_state.wizard_selected_comments[item_key]:
-                                    st.session_state.wizard_selected_comments[item_key].remove(comment_id)
-                            
-                            if len(comment_text) > 150:
-                                with st.expander("View full comment"):
-                                    st.write(comment_text)
-                    
-                    st.markdown("**✏️ Custom notes (optional):**")
-                    custom_note = st.text_area(
-                        "Custom note",
-                        value=st.session_state.wizard_custom_notes.get(item_key, ""),
-                        key=f"custom_{item_key}",
-                        height=80,
-                        label_visibility="collapsed",
-                        placeholder="Add any additional comments specific to this review..."
-                    )
-                    st.session_state.wizard_custom_notes[item_key] = custom_note
-                    
-                    st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown("---")
-    
+    _render_checklist()
+
     # =========================================================================
     # STANDALONE RESUBMITTAL QUESTION
     # Positioned between the checklist and Step 3, inside its own styled box
