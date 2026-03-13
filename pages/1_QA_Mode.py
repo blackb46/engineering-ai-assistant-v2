@@ -5,11 +5,6 @@ City of Brentwood Engineering AI Assistant - V2
 Q&A Mode — policy question answering with footnote citations.
 """
 
-# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
-# MUST be the very first import — before streamlit and any torch-dependent libs.
-import torch
-torch.classes.__path__ = []
-
 import sys
 from pathlib import Path
 import streamlit as st
