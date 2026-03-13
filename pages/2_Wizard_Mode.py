@@ -5,13 +5,6 @@ City of Brentwood Engineering AI Assistant - V2
 Wizard Mode — interactive plan review checklist with export.
 """
 
-# ── PyTorch / Streamlit watcher compatibility fix ─────────────────────────────
-# MUST be the very first import — before streamlit, before anything that touches
-# torch. Streamlit 1.43+ file watcher crashes when scanning torch.classes.
-# This suppresses it by clearing the internal path list before Streamlit sees it.
-import torch
-torch.classes.__path__ = []
-
 import streamlit as st
 import sys
 import csv
