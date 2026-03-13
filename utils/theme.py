@@ -97,21 +97,33 @@ def _logo_b64(color: bool = True) -> str:
     return result
 
 
+# Cache favicon so PIL file I/O only happens once per server session,
+# not on every page render / rerender.
+_FAVICON_CACHE: dict = {}
+
+
 def get_favicon():
     """
     Return the City crest as a PIL Image for use as set_page_config(page_icon=...).
     Falls back to a string emoji if PIL or the logo file is unavailable.
+    Result is cached so the file is only opened once per server process.
     """
+    if "favicon" in _FAVICON_CACHE:
+        return _FAVICON_CACHE["favicon"]
     if not _PIL_AVAILABLE:
+        _FAVICON_CACHE["favicon"] = "🏛"
         return "🏛"
     p = _get_logo_path(color=True)
     if p is None:
+        _FAVICON_CACHE["favicon"] = "🏛"
         return "🏛"
     try:
         img = _PILImage.open(p)
         img.thumbnail((64, 64), _PILImage.LANCZOS)
+        _FAVICON_CACHE["favicon"] = img
         return img
     except Exception:
+        _FAVICON_CACHE["favicon"] = "🏛"
         return "🏛"
 
 
