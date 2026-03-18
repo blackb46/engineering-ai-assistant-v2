@@ -33,6 +33,21 @@ from checklist_data import (
 from comments_database import COMMENTS, get_comment
 from theme import apply_theme, render_sidebar, page_header, section_heading, footer, get_favicon
 
+# ── Traffic Calming module (gracefully unavailable if files not yet uploaded) ──
+try:
+    from traffic_calming_data import (
+        ARTERIAL_STREETS,
+        COLLECTOR_STREETS,
+        STREET_CLASSIFICATIONS,
+        APPLICATION_TYPES,
+        TIER2_STRATEGIES,
+        SCORING_CRITERIA,
+    )
+    from traffic_calming_report import build_traffic_calming_report
+    TC_AVAILABLE = True
+except ImportError:
+    TC_AVAILABLE = False
+
 try:
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
@@ -700,6 +715,1010 @@ def _render_checklist():
                 st.markdown("---")
 
 
+def render_traffic_calming_wizard():
+    """
+    Renders the Traffic Calming Application Review form.
+
+    Street name entry adapts to classification:
+      - Arterial  → dropdown of all Municipal Code arterial streets
+      - Collector → dropdown of all Municipal Code collector streets
+      - Local     → free-text entry
+
+    All session state keys use the 'tc_' prefix to avoid any collision
+    with the existing wizard's 'wizard_' prefixed keys.
+
+    The Word export button calls build_traffic_calming_report() from
+    utils/traffic_calming_report.py and streams the .docx to the browser.
+    """
+    st.markdown(
+        "<div class='bw-step-heading'>Traffic Calming Application Review</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Policy: Resolution 2026-12 · City of Brentwood, TN · Adopted 02/09/2026"
+    )
+
+    # ── Safe session-state getter with default ────────────────────────────
+    def ss(key, default=""):
+        if key not in st.session_state:
+            st.session_state[key] = default
+        return st.session_state[key]
+
+    def safe_idx(options, value):
+        try:
+            return options.index(value)
+        except ValueError:
+            return 0
+
+    # =========================================================================
+    # SECTION I: ADMINISTRATIVE REVIEW
+    # =========================================================================
+    with st.expander("I. Administrative Review", expanded=True):
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state["tc_case_num"] = st.text_input(
+                "Case / File Number",
+                value=ss("tc_case_num"),
+                key="inp_tc_case_num",
+                placeholder="e.g. TC-2026-001",
+            )
+        with col2:
+            st.session_state["tc_app_date"] = st.text_input(
+                "Application Date (MM/DD/YYYY)",
+                value=ss("tc_app_date"),
+                key="inp_tc_app_date",
+            )
+
+        # ── Step 1: Classification drives the street name widget ──────────
+        st.markdown("---")
+        st.markdown(
+            "**Step 1 — Street Classification** "
+            "*(determines street list below)*"
+        )
+
+        class_opts = ["— Select —"] + list(STREET_CLASSIFICATIONS.keys())
+        cur_class  = ss("tc_street_class")
+        new_class  = st.selectbox(
+            "Street Classification",
+            options=class_opts,
+            index=safe_idx(class_opts, cur_class),
+            key="sel_tc_street_class",
+            help=(
+                "Arterial and Collector show City-designated street lists. "
+                "Local streets use free-text entry."
+            ),
+        )
+        st.session_state["tc_street_class"] = (
+            "" if new_class == "— Select —" else new_class
+        )
+        street_class = st.session_state["tc_street_class"]
+
+        # Policy notice
+        if "Collector" in street_class:
+            st.success(
+                "✓ **Collector Street** — Traffic Calming Policy applies (Part V). "
+                "100% City-funded subject to budget approval."
+            )
+        elif "Local" in street_class:
+            st.info(
+                "ℹ **Local Street** — Speed Hump Policy applies (Part VII). "
+                "Residents pay **60%** of direct costs plus 10% contingency."
+            )
+        elif "Arterial" in street_class:
+            st.warning(
+                "⚠ **Arterial Street** — Standard traffic calming policy does **NOT** apply. "
+                "Engineering study required. City Commission direction needed for any calming."
+            )
+
+        # ── Step 2: Street name adapts to classification ──────────────────
+        st.markdown("**Step 2 — Street Name**")
+
+        if "Arterial" in street_class:
+            art_opts = ["— Select Arterial —"] + ARTERIAL_STREETS
+            cur_art  = ss("tc_street_name")
+            new_art  = st.selectbox(
+                "Arterial Street (Municipal Code — Arterial Designation)",
+                options=art_opts,
+                index=safe_idx(art_opts, cur_art),
+                key="sel_tc_art_name",
+            )
+            st.session_state["tc_street_name"] = (
+                "" if new_art == "— Select Arterial —" else new_art
+            )
+
+        elif "Collector" in street_class:
+            col_opts = ["— Select Collector —"] + COLLECTOR_STREETS
+            cur_col  = ss("tc_street_name")
+            new_col  = st.selectbox(
+                "Collector Street (Municipal Code — Collector Designation)",
+                options=col_opts,
+                index=safe_idx(col_opts, cur_col),
+                key="sel_tc_col_name",
+            )
+            st.session_state["tc_street_name"] = (
+                "" if new_col == "— Select Collector —" else new_col
+            )
+
+        elif "Local" in street_class:
+            st.session_state["tc_street_name"] = st.text_input(
+                "Local Street Name (enter manually)",
+                value=ss("tc_street_name"),
+                key="inp_tc_local_name",
+                placeholder="e.g. Oakwood Court",
+            )
+
+        else:
+            st.text_input(
+                "Street Name (select classification above first)",
+                value="",
+                disabled=True,
+                key="inp_tc_name_disabled",
+            )
+
+        # ── Step 3: Segment / limits — always free text ───────────────────
+        st.markdown("**Step 3 — Street Segment / Limits**")
+        st.session_state["tc_street_segment"] = st.text_input(
+            "Segment Description / Limits  *(e.g. 'from Oak Drive to Elm Street')*",
+            value=ss("tc_street_segment"),
+            key="inp_tc_segment",
+            placeholder="From ________ to ________",
+        )
+        st.session_state["tc_seg_length"] = st.text_input(
+            "Approximate Segment Length (ft)  *[Part V–a – Other Criteria; Part VII]*",
+            value=ss("tc_seg_length"),
+            key="inp_tc_seg_len",
+            placeholder="ft",
+        )
+
+        # ── Step 4: Application type ──────────────────────────────────────
+        st.markdown("---")
+        st.markdown("**Step 4 — Application Type**")
+        type_opts = ["— Select —"] + list(APPLICATION_TYPES.keys())
+        cur_type  = ss("tc_app_type")
+        new_type  = st.selectbox(
+            "Application Type",
+            options=type_opts,
+            index=safe_idx(type_opts, cur_type),
+            key="sel_tc_app_type",
+        )
+        st.session_state["tc_app_type"] = (
+            "" if new_type == "— Select —" else new_type
+        )
+
+        # ── Petitioner info ───────────────────────────────────────────────
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state["tc_petitioner_name"] = st.text_input(
+                "Petitioner Name / Organization",
+                value=ss("tc_petitioner_name"),
+                key="inp_tc_pet_name",
+            )
+        with col2:
+            st.session_state["tc_petitioner_contact"] = st.text_input(
+                "Petitioner Contact (Phone / Email)",
+                value=ss("tc_petitioner_contact"),
+                key="inp_tc_pet_contact",
+            )
+
+        # ── HOA prerequisite ──────────────────────────────────────────────
+        st.markdown(
+            "**HOA Prerequisite** *(Part V – Procedures; Part VII)*"
+        )
+        hoa_opts = [
+            "— Select —",
+            "HOA submitting request to City",
+            "HOA denied — resident proceeding directly",
+            "HOA inaction after 90 days — resident proceeding",
+            "No HOA — resident petition permitted",
+        ]
+        st.session_state["tc_hoa_status"] = st.selectbox(
+            "HOA Determination",
+            options=hoa_opts,
+            index=safe_idx(hoa_opts, ss("tc_hoa_status")),
+            key="sel_tc_hoa_status",
+        )
+        st.session_state["tc_c_hoa_gov"] = st.checkbox(
+            "HOA governance confirmed  *[Part V / VII]*",
+            value=bool(ss("tc_c_hoa_gov", False)),
+            key="chk_tc_hoa_gov",
+        )
+        st.session_state["tc_c_hoa_req"] = st.checkbox(
+            "HOA written request submitted — or bypass justified "
+            "(denied / 90-day inaction)  *[Part V / VII]*",
+            value=bool(ss("tc_c_hoa_req", False)),
+            key="chk_tc_hoa_req",
+        )
+
+        # ── Initial petition ───────────────────────────────────────────────
+        st.markdown(
+            "**Initial Support Petition** "
+            "*— >50% of homes within 600 ft; one signature/printed name per residence; "
+            "eligibility ends 100 ft before a stop sign or traffic impediment  [Part V / VII]*"
+        )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.session_state["tc_eligible_res"] = st.text_input(
+                "Eligible Residences (#)",
+                value=ss("tc_eligible_res"),
+                key="inp_tc_elig",
+            )
+        with col2:
+            st.session_state["tc_sigs_received"] = st.text_input(
+                "Signatures Received (#)",
+                value=ss("tc_sigs_received"),
+                key="inp_tc_sigs",
+            )
+        with col3:
+            try:
+                pct_val = (
+                    float(ss("tc_sigs_received") or 0)
+                    / float(ss("tc_eligible_res") or 1)
+                    * 100
+                )
+                pct_str = f"{pct_val:.1f}%"
+                st.session_state["tc_init_pct"] = pct_str
+                color = "green" if pct_val > 50 else "red"
+                st.markdown(f"**Initial Support:** :{color}[{pct_str}]")
+                if pct_val <= 50:
+                    st.caption("⛔ Must exceed 50% to initiate study")
+            except Exception:
+                st.markdown("**Initial Support:** —")
+
+        st.session_state["tc_c_init_pet"] = st.checkbox(
+            "Initial >50% support petition obtained  *[Part V / VII]*",
+            value=bool(ss("tc_c_init_pet", False)),
+            key="chk_tc_init_pet",
+        )
+        st.session_state["tc_c_pet_format"] = st.checkbox(
+            "One signature and printed name per residence confirmed  *[Part V]*",
+            value=bool(ss("tc_c_pet_format", False)),
+            key="chk_tc_pet_format",
+        )
+        st.session_state["tc_problem_desc"] = st.text_area(
+            "Description of Perceived Problem / Safety Concern",
+            value=ss("tc_problem_desc"),
+            height=80,
+            key="ta_tc_problem",
+        )
+
+    # =========================================================================
+    # SECTION II: CLASSIFICATION ELIGIBILITY
+    # =========================================================================
+    with st.expander("II. Classification Eligibility Confirmation", expanded=False):
+        st.session_state["tc_c_not_private"] = st.checkbox(
+            "Public street confirmed (not a private street in a gated community)  "
+            "*[Part V / VII]*",
+            value=bool(ss("tc_c_not_private", False)),
+            key="chk_tc_not_private",
+        )
+        st.session_state["tc_c_not_emergency"] = st.checkbox(
+            "Confirmed NOT a designated primary emergency route  "
+            "*[Part V – Introduction]*",
+            value=bool(ss("tc_c_not_emergency", False)),
+            key="chk_tc_not_emergency",
+        )
+        if "Collector" in street_class:
+            st.session_state["tc_c_collector_list"] = st.checkbox(
+                "Collector: verified on City's identified residential collector "
+                "street list  *[Part V – Introduction]*",
+                value=bool(ss("tc_c_collector_list", False)),
+                key="chk_tc_collector_list",
+            )
+            st.caption(
+                "Residential collector list per Resolution 2026-12 Part V: "
+                "Arrowhead Dr, Belle Rive Dr, Bluff Rd, Carriage Hills Dr, "
+                "Charity Dr, Concord Pass, Gen. George Patton Dr, Gordon Petty Rd, "
+                "Johnson Chapel Rd W, Jones Pkwy, Knox Valley Dr, Lipscomb Dr, "
+                "Manley Ln, McGavock Rd, Pinkerton Rd, Stanfield Rd, "
+                "Steeplechase Dr, Sunset Rd (N of Concord Rd), Walnut Hills Dr — "
+                "or identified via land development approval process."
+            )
+
+    # =========================================================================
+    # SECTION III: DATA COLLECTION
+    # =========================================================================
+    with st.expander("III. Data Collection & Field Review", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.session_state["tc_data_85th"] = st.text_input(
+                "85th %ile Speed (mph)  *[Part V–a / VII]*",
+                value=ss("tc_data_85th"),
+                key="inp_tc_85th",
+            )
+            st.session_state["tc_data_adt"] = st.text_input(
+                "ADT (vehicles/day)  *[Part V–a / VII]*",
+                value=ss("tc_data_adt"),
+                key="inp_tc_adt",
+            )
+        with col2:
+            st.session_state["tc_data_limit"] = st.text_input(
+                "Posted Speed Limit (mph)",
+                value=ss("tc_data_limit"),
+                key="inp_tc_limit",
+            )
+            st.session_state["tc_data_crashes"] = st.text_input(
+                "Crash Count (12 months)  *[Parts I–II]*",
+                value=ss("tc_data_crashes"),
+                key="inp_tc_crashes",
+            )
+        with col3:
+            try:
+                excess_val = (
+                    float(ss("tc_data_85th") or 0)
+                    - float(ss("tc_data_limit") or 0)
+                )
+                excess_str = f"{excess_val:.1f} mph over limit"
+                st.session_state["tc_speed_excess"]     = excess_str
+                st.session_state["tc_speed_excess_raw"] = excess_val
+                color = "green" if excess_val >= 8 else "red"
+                st.markdown(f"**Speed Excess:** :{color}[{excess_str}]")
+                if "Collector" in street_class and excess_val < 8:
+                    st.caption(
+                        "⛔ Collector criterion: ≥8 mph over limit required *[Part V–a]*"
+                    )
+            except Exception:
+                st.markdown("**Speed Excess:** —")
+            st.session_state["tc_data_cutthru"] = st.text_input(
+                "Cut-Through Traffic %  *[Part VII — ≥35% = cut-through]*",
+                value=ss("tc_data_cutthru"),
+                key="inp_tc_cutthru",
+            )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            school_opts = [
+                "— Select —",
+                "Yes — street is on a school walking route",
+                "No — not a school walking route",
+            ]
+            st.session_state["tc_data_school_route"] = st.selectbox(
+                "School Walking Route?  *[Part V–b–3: 10 pts if yes]*",
+                options=school_opts,
+                index=safe_idx(school_opts, ss("tc_data_school_route")),
+                key="sel_tc_school",
+            )
+        with col2:
+            swlk_opts = [
+                "— Select —",
+                "No continuous sidewalk",
+                "Continuous sidewalk exists",
+            ]
+            st.session_state["tc_data_sidewalk_status"] = st.selectbox(
+                "Continuous Sidewalk?  *[Part V–b–3: 10 pts if no sidewalk]*",
+                options=swlk_opts,
+                index=safe_idx(swlk_opts, ss("tc_data_sidewalk_status")),
+                key="sel_tc_sidewalk",
+            )
+
+        st.session_state["tc_c_data_speed"] = st.checkbox(
+            "Speed study completed (≥24-hr weekday for collectors)  *[Part V–a]*",
+            value=bool(ss("tc_c_data_speed", False)), key="chk_tc_dspd",
+        )
+        st.session_state["tc_c_data_vol"] = st.checkbox(
+            "Traffic count / ADT collected  *[Part V–a / VII]*",
+            value=bool(ss("tc_c_data_vol", False)), key="chk_tc_dvol",
+        )
+        st.session_state["tc_c_data_crash"] = st.checkbox(
+            "Crash history reviewed (12 months minimum)  *[Parts I–II]*",
+            value=bool(ss("tc_c_data_crash", False)), key="chk_tc_dcrash",
+        )
+        st.session_state["tc_c_data_school"] = st.checkbox(
+            "School route status confirmed  *[Part V–b–3]*",
+            value=bool(ss("tc_c_data_school", False)), key="chk_tc_dsch",
+        )
+        st.session_state["tc_c_data_sidewalk"] = st.checkbox(
+            "Continuous sidewalk presence/absence confirmed  *[Part V–b–3]*",
+            value=bool(ss("tc_c_data_sidewalk", False)), key="chk_tc_dswlk",
+        )
+        st.session_state["tc_data_notes"] = st.text_area(
+            "Data Collection Notes / Summary",
+            value=ss("tc_data_notes"),
+            height=80,
+            key="ta_tc_data_notes",
+        )
+
+    # =========================================================================
+    # SECTION IV: STREET-TYPE SPECIFIC CRITERIA
+    # =========================================================================
+    if "Collector" in street_class:
+        with st.expander(
+            "IV. Traffic Calming — Collector Street Criteria (Part V)",
+            expanded=False,
+        ):
+            st.markdown(
+                "**Roadway Eligibility Criteria — All must be met** *[Part V–a]*"
+            )
+            try:
+                adt_ok = float(ss("tc_data_adt") or 0) >= 500
+                len_ok = float(ss("tc_seg_length") or 0) >= 800
+                spd_ok = float(ss("tc_speed_excess_raw") or 0) >= 8
+                if not adt_ok:
+                    st.error(
+                        f"⛔ ADT must be ≥500 vpd — entered: "
+                        f"{ss('tc_data_adt') or '?'}  *[Part V–a – Volume]*"
+                    )
+                if not len_ok:
+                    st.error(
+                        f"⛔ Segment must be ≥800 ft — entered: "
+                        f"{ss('tc_seg_length') or '?'} ft  *[Part V–a – Other Criteria]*"
+                    )
+                if not spd_ok:
+                    st.error(
+                        f"⛔ 85th %ile must exceed limit by ≥8 mph — current: "
+                        f"{ss('tc_speed_excess') or '?'}  *[Part V–a – Speed]*"
+                    )
+                if adt_ok and len_ok and spd_ok:
+                    st.success(
+                        "✓ All three roadway criteria met — eligible to proceed with study."
+                    )
+            except Exception:
+                pass
+
+            st.session_state["tc_c_coll_speed_data"] = st.checkbox(
+                "24-hr weekday speed data collected  *[Part V–a – Speed]*",
+                value=bool(ss("tc_c_coll_speed_data", False)), key="chk_coll_spd",
+            )
+            st.session_state["tc_c_coll_2lanes"] = st.checkbox(
+                "Street has no more than two traffic lanes (one each direction)  "
+                "*[Part V–a – Other Criteria]*",
+                value=bool(ss("tc_c_coll_2lanes", False)), key="chk_coll_2ln",
+            )
+            st.session_state["tc_c_coll_termini"] = st.checkbox(
+                "Logical termini for calming treatment beginning/end identifiable  "
+                "*[Part V–a – Other Criteria]*",
+                value=bool(ss("tc_c_coll_termini", False)), key="chk_coll_term",
+            )
+            st.markdown(
+                "**Engineering Study Contents Required** *[Part V–b–1]*"
+            )
+            st.session_state["tc_c_coll_study_vol"] = st.checkbox(
+                "Study includes traffic volume analysis",
+                value=bool(ss("tc_c_coll_study_vol", False)), key="chk_coll_svol",
+            )
+            st.session_state["tc_c_coll_study_speed"] = st.checkbox(
+                "Study includes traffic speed analysis",
+                value=bool(ss("tc_c_coll_study_speed", False)), key="chk_coll_sspd",
+            )
+            st.session_state["tc_c_coll_study_crash"] = st.checkbox(
+                "Study includes accident history for the subject street segment",
+                value=bool(ss("tc_c_coll_study_crash", False)), key="chk_coll_scrash",
+            )
+            st.session_state["tc_c_coll_study_sidewalk"] = st.checkbox(
+                "Study notes presence or absence of sidewalks",
+                value=bool(ss("tc_c_coll_study_sidewalk", False)), key="chk_coll_sswlk",
+            )
+            st.session_state["tc_c_coll_study_school"] = st.checkbox(
+                "Study addresses whether street is on a school walking route  "
+                "*[Part V–b–1 / V–b–3]*",
+                value=bool(ss("tc_c_coll_study_school", False)), key="chk_coll_ssch",
+            )
+            st.session_state["tc_c_coll_study_t2"] = st.checkbox(
+                "Study outlines applicable Tier 2 strategies for this location  "
+                "*[Part V–b–1]*",
+                value=bool(ss("tc_c_coll_study_t2", False)), key="chk_coll_st2",
+            )
+
+    elif "Local" in street_class:
+        with st.expander(
+            "IV. Speed Hump Eligibility — Local Street (Part VII)",
+            expanded=False,
+        ):
+            st.markdown(
+                "**Street Eligibility Criteria — All must be met** *[Part VII]*"
+            )
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.session_state["tc_local_adt"] = st.text_input(
+                    "Current ADT (vpd)  *500–2,500 required*",
+                    value=ss("tc_local_adt"), key="inp_ladt",
+                )
+                st.session_state["tc_local_width"] = st.text_input(
+                    "Street Width (ft)  *<30 ft required*",
+                    value=ss("tc_local_width"), key="inp_lwid",
+                )
+            with col2:
+                st.session_state["tc_local_adt_proj"] = st.text_input(
+                    "Projected Full-Build ADT  *≤2,500 required*",
+                    value=ss("tc_local_adt_proj"), key="inp_ladtpr",
+                )
+                st.session_state["tc_local_grade"] = st.text_input(
+                    "Street Grade (%)  *≤6% required*",
+                    value=ss("tc_local_grade"), key="inp_lgrade",
+                )
+            with col3:
+                st.session_state["tc_local_spd_limit"] = st.text_input(
+                    "Posted Speed Limit (mph)  *≤30 mph required*",
+                    value=ss("tc_local_spd_limit"), key="inp_lspd",
+                )
+                try:
+                    adt_v = float(ss("tc_local_adt") or 0)
+                    if adt_v > 0:
+                        if adt_v < 500 or adt_v > 2500:
+                            st.error(
+                                f"⛔ ADT {adt_v:.0f} outside 500–2,500 range  *[Part VII]*"
+                            )
+                        else:
+                            st.success(f"✓ ADT {adt_v:.0f} within range")
+                except Exception:
+                    pass
+
+            st.session_state["tc_c_local_lanewidth"] = st.checkbox(
+                "Two-lane street less than 30 ft wide confirmed  *[Part VII]*",
+                value=bool(ss("tc_c_local_lanewidth", False)), key="chk_llw",
+            )
+            st.session_state["tc_c_local_grade"] = st.checkbox(
+                "Grade does not exceed 6%  *[Part VII]*",
+                value=bool(ss("tc_c_local_grade", False)), key="chk_lg",
+            )
+            st.session_state["tc_c_local_speedlimit"] = st.checkbox(
+                "Posted speed limit is 30 mph or less  *[Part VII]*",
+                value=bool(ss("tc_c_local_speedlimit", False)), key="chk_ls",
+            )
+            st.session_state["tc_c_local_notarterial"] = st.checkbox(
+                "Confirmed NOT an arterial or collector street "
+                "(speed humps prohibited on those)  *[Part VII]*",
+                value=bool(ss("tc_c_local_notarterial", False)), key="chk_lna",
+            )
+            st.session_state["tc_c_local_cutthru"] = st.checkbox(
+                "Street has identified cut-through or speeding problem — confirmed by data  "
+                "*[Part VII]*",
+                value=bool(ss("tc_c_local_cutthru", False)), key="chk_lct",
+            )
+            st.caption(
+                "Cut-through = ≥35% of traffic does not originate or terminate in the subdivision. "
+                "Speeding = 85th %ile speed exceeds posted limit."
+            )
+            st.session_state["tc_c_local_connection"] = st.checkbox(
+                "Street provides connection between two arterial/collector streets, "
+                "or permits pass-through from another subdivision  *[Part VII]*",
+                value=bool(ss("tc_c_local_connection", False)), key="chk_lcon",
+            )
+            st.markdown(
+                "**Design Requirements** *(verified prior to installation)* *[Part VII]*"
+            )
+            st.session_state["tc_c_hump_spacing"] = st.checkbox(
+                "Minimum two (2) humps proposed; spacing 300–600 ft apart  *[Part VII]*",
+                value=bool(ss("tc_c_hump_spacing", False)), key="chk_hsp",
+            )
+            st.session_state["tc_c_hump_clearance"] = st.checkbox(
+                "Each hump is ≥200 ft from any intersection and from any horizontal curve "
+                "with centerline radius ≤150 ft  *[Part VII]*",
+                value=bool(ss("tc_c_hump_clearance", False)), key="chk_hcl",
+            )
+            st.session_state["tc_c_hump_dims"] = st.checkbox(
+                "Hump maximum height 3–4 inches; travel length 12 ft per standard "
+                "dimensions figure  *[Part VII]*",
+                value=bool(ss("tc_c_hump_dims", False)), key="chk_hdm",
+            )
+            st.session_state["tc_c_hump_signage"] = st.checkbox(
+                "Regulatory 'Residential Speed Control District' signs installed "
+                "(24\"×24\", black on white) in advance of first hump series  *[Part VII]*",
+                value=bool(ss("tc_c_hump_signage", False)), key="chk_hsg",
+            )
+            st.session_state["tc_c_hump_warn"] = st.checkbox(
+                "MUTCD advance warning signs installed: 30\"×30\" 'SPEED HUMPS' + "
+                "18\"×18\" '15 M.P.H.' advisory plate, ~125 ft before first hump  "
+                "*[Part VII]*",
+                value=bool(ss("tc_c_hump_warn", False)), key="chk_hwn",
+            )
+            st.session_state["tc_c_hump_markings"] = st.checkbox(
+                "Double yellow centerline continued across all humps; 12-inch white "
+                "stripes at 6\" O.C. per standard pavement marking details  *[Part VII]*",
+                value=bool(ss("tc_c_hump_markings", False)), key="chk_hmk",
+            )
+            st.session_state["tc_c_hump_drainage"] = st.checkbox(
+                "All hump locations reviewed by City Engineer to confirm drainage is "
+                "adequately accommodated  *[Part VII]*",
+                value=bool(ss("tc_c_hump_drainage", False)), key="chk_hdr",
+            )
+
+    # =========================================================================
+    # SECTION V: TIER 1
+    # =========================================================================
+    with st.expander(
+        "V. Tier 1 — Non-Construction Strategies (Part V–b–1)", expanded=False
+    ):
+        if "Local" in street_class:
+            st.info(
+                "ℹ For local street applications, 'less dramatic measures' (signs, "
+                "striping) must be evaluated first. Effectiveness is re-evaluated "
+                "6 months after installation before the final speed hump decision.  "
+                "*[Part VII]*"
+            )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state["tc_t1_date"] = st.text_input(
+                "Tier 1 Implementation Date",
+                value=ss("tc_t1_date"), key="inp_t1_date",
+            )
+        with col2:
+            st.session_state["tc_t1_review_date"] = st.text_input(
+                "Six-Month Effectiveness Review Date",
+                value=ss("tc_t1_review_date"), key="inp_t1_rev",
+            )
+        st.session_state["tc_c_t1_study"] = st.checkbox(
+            "Study recommendation includes one or more Tier 1 strategies  *[Part V–b–1]*",
+            value=bool(ss("tc_c_t1_study", False)), key="chk_t1s",
+        )
+        st.session_state["tc_c_t1_petitioner"] = st.checkbox(
+            "Staff met with petitioner to outline study recommendations  *[Part V–b–1]*",
+            value=bool(ss("tc_c_t1_petitioner", False)), key="chk_t1p",
+        )
+        st.session_state["tc_c_t1_implemented"] = st.checkbox(
+            "Tier 1 strategy implemented  *[Part V–b–1]*",
+            value=bool(ss("tc_c_t1_implemented", False)), key="chk_t1i",
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state["tc_c_t1_effective"] = st.checkbox(
+                "✅ Tier 1 determined EFFECTIVE after 6 months — no further action  "
+                "*[Part V–b–1]*",
+                value=bool(ss("tc_c_t1_effective", False)), key="chk_t1eff",
+            )
+        with col2:
+            st.session_state["tc_c_t1_ineffective"] = st.checkbox(
+                "❌ Tier 1 determined INEFFECTIVE after 6 months — Tier 2 requested  "
+                "*[Part V–b–1]*",
+                value=bool(ss("tc_c_t1_ineffective", False)), key="chk_t1ineff",
+            )
+        if st.session_state.get("tc_c_t1_effective") and st.session_state.get(
+            "tc_c_t1_ineffective"
+        ):
+            st.warning(
+                "⚠ Cannot mark both effective and ineffective — please uncheck one."
+            )
+        st.session_state["tc_t1_notes"] = st.text_area(
+            "Tier 1 Notes (strategies applied, effectiveness findings)",
+            value=ss("tc_t1_notes"), height=80, key="ta_t1notes",
+        )
+
+    # =========================================================================
+    # SECTION VI: TIER 2 / SECOND PETITION
+    # =========================================================================
+    with st.expander(
+        "VI. Tier 2 / Speed Humps — Second Petition (Parts V–b–2; VII)",
+        expanded=False,
+    ):
+        if "Collector" in street_class:
+            st.caption(
+                "⚠ Speed humps are NOT eligible on designated collector roads.  "
+                "*[Part V–b Tier 2 Note]*"
+            )
+        st.markdown("**Tier 2 Strategies Proposed** *[Part V–b Tier 2]*")
+        t2_selected = []
+        for strat, cite in TIER2_STRATEGIES:
+            safe_key = (
+                "tc_t2_"
+                + strat[:25].replace(" ", "_").replace("/", "_").replace(",", "").lower()
+            )
+            val = st.checkbox(
+                f"{strat}  *[{cite}]*",
+                value=bool(ss(safe_key, False)),
+                key=f"chk_{safe_key}",
+            )
+            st.session_state[safe_key] = val
+            if val:
+                t2_selected.append(strat)
+        st.session_state["tc_t2_strategies"] = t2_selected
+
+        st.markdown("**Required Review Steps** *[Part V–b–2]*")
+        st.session_state["tc_c_t2_validate"] = st.checkbox(
+            "City conducted second study validating Tier 1 was ineffective  *[Part V–b–2]*",
+            value=bool(ss("tc_c_t2_validate", False)), key="chk_t2v",
+        )
+        st.session_state["tc_c_t2_trafficeng"] = st.checkbox(
+            "Tier 2 strategy reviewed by City's Traffic Engineer prior to recommendation  "
+            "*[Part V–b–2]*",
+            value=bool(ss("tc_c_t2_trafficeng", False)), key="chk_t2te",
+        )
+        st.session_state["tc_c_t2_sep_petition"] = st.checkbox(
+            "Separate petition prepared for each proposed improvement  *[Part V–b–2]*",
+            value=bool(ss("tc_c_t2_sep_petition", False)), key="chk_t2sp",
+        )
+        st.caption(
+            "For a series of improvements (speed tables, circles), one petition per "
+            "improvement is required."
+        )
+
+        st.markdown("**Second-Round Petition Process** *[Part V–b–2; Part VII]*")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.session_state["tc_pet2_total"] = st.text_input(
+                "Total Households — Affected Area (within 600 ft)  *[Part V–b–2 / VII]*",
+                value=ss("tc_pet2_total"), key="inp_pet2tot",
+            )
+            st.session_state["tc_pet2_mail"] = st.text_input(
+                "Petition Mail Date  *[Part V–b–2 / VII]*",
+                value=ss("tc_pet2_mail"), key="inp_pet2mail",
+            )
+        with col2:
+            st.session_state["tc_pet2_yes"] = st.text_input(
+                "Yes Votes Received  *[Part V–b–2 / VII]*",
+                value=ss("tc_pet2_yes"), key="inp_pet2yes",
+            )
+            st.session_state["tc_pet2_deadline"] = st.text_input(
+                "45-Day Response Deadline  *[Part V–b–2 / VII]*",
+                value=ss("tc_pet2_deadline"), key="inp_pet2dl",
+            )
+        with col3:
+            try:
+                pct2 = (
+                    float(ss("tc_pet2_yes") or 0)
+                    / float(ss("tc_pet2_total") or 1)
+                    * 100
+                )
+                pct2_str = f"{pct2:.1f}%"
+                st.session_state["tc_pet2_pct"] = pct2_str
+                color2 = "green" if pct2 >= 66.7 else "red"
+                st.markdown(f"**Support:** :{color2}[{pct2_str}]")
+                st.caption(
+                    "✓ Threshold met — proceed to public meeting"
+                    if pct2 >= 66.7
+                    else "⛔ Need ≥66.7% (2/3) to proceed"
+                )
+            except Exception:
+                st.markdown("**Support:** —")
+            st.session_state["tc_pet2_ext"] = st.checkbox(
+                "30-day extension granted  *[Part V–b–2 / VII]*",
+                value=bool(ss("tc_pet2_ext", False)), key="chk_pet2ext",
+            )
+            st.caption(
+                "Extension requires extenuating circumstances; request must be submitted "
+                "within 7 days of notification of results."
+            )
+
+        st.session_state["tc_c_pet2_mailed"] = st.checkbox(
+            "Petitions mailed by City on petitioner's behalf (City mails twice)  "
+            "*[Part V–b–2 / VII]*",
+            value=bool(ss("tc_c_pet2_mailed", False)), key="chk_p2m",
+        )
+        st.session_state["tc_c_pet2_hoa"] = st.checkbox(
+            "Vote eligibility confirmed NOT contingent on HOA membership status  "
+            "*[Part V–b–2 / VII]*",
+            value=bool(ss("tc_c_pet2_hoa", False)), key="chk_p2h",
+        )
+        st.session_state["tc_c_pet2_nonresp"] = st.checkbox(
+            "Non-responses confirmed counted as 'no' votes  *[Part V–b–2 / VII]*",
+            value=bool(ss("tc_c_pet2_nonresp", False)), key="chk_p2nr",
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state["tc_moratorium_start"] = st.text_input(
+                "Last Day of Voting Window  *(start of moratorium if petition fails)*",
+                value=ss("tc_moratorium_start"), key="inp_mstart",
+            )
+        with col2:
+            st.session_state["tc_moratorium_end"] = st.text_input(
+                "Moratorium End Date  *(24 months; or 12 months per Res. 2026-12 §3)*",
+                value=ss("tc_moratorium_end"), key="inp_mend",
+            )
+        st.caption(
+            "Per Resolution 2026-12 §3: petitions with votes that occurred within "
+            "12 months before adoption (02/09/2026) use a 12-month moratorium only."
+        )
+
+        if "Local" in street_class:
+            st.markdown(
+                "**Cost-Share Agreement — Local Streets** *[Part VII]*"
+            )
+            st.session_state["tc_c_costshare_agree"] = st.checkbox(
+                "Petition signed by ≥2/3 of households agreeing to pay 60% of direct costs  "
+                "*[Part VII]*",
+                value=bool(ss("tc_c_costshare_agree", False)), key="chk_csa",
+            )
+            st.session_state["tc_c_hoa_letter"] = st.checkbox(
+                "HOA funding letter on file confirming HOA will cover the cost-share  "
+                "*[Part VII]*",
+                value=bool(ss("tc_c_hoa_letter", False)), key="chk_hoal",
+            )
+
+    # =========================================================================
+    # SECTION VII: COST & PRIORITIZATION
+    # =========================================================================
+    with st.expander(
+        "VII. Cost Estimates & Prioritization Scoring", expanded=False
+    ):
+        if "Collector" in street_class:
+            st.markdown(
+                "**Tier 2 Prioritization Scoring** "
+                "*[Part V–b–3 — used when multiple Tier 2 requests are pending]*"
+            )
+            total_score = 0
+            for crit in SCORING_CRITERIA:
+                score_val = st.number_input(
+                    f"{crit['label']} — max {crit['max']} pts  |  "
+                    f"{crit['basis']}  *[{crit['cite']}]*",
+                    min_value=0,
+                    max_value=crit["max"],
+                    step=1,
+                    value=int(ss(f"tc_score_{crit['id']}", 0) or 0),
+                    key=f"num_score_{crit['id']}",
+                )
+                st.session_state[f"tc_score_{crit['id']}"] = score_val
+                total_score += score_val
+            st.session_state["tc_total_score"] = total_score
+            st.metric("Total Priority Score", f"{total_score} / 100")
+            st.divider()
+
+        st.markdown("**Cost Estimate**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.session_state["tc_cost_direct"] = st.text_input(
+                "Estimated Direct Cost ($)  *[Part VII]*",
+                value=ss("tc_cost_direct"), key="inp_costd",
+            )
+        with col2:
+            try:
+                direct  = float(ss("tc_cost_direct") or 0)
+                conting = direct * 0.10
+                total_c = direct + conting
+                st.session_state["tc_cost_contingency"] = f"${conting:,.2f}"
+                st.session_state["tc_cost_total"]       = f"${total_c:,.2f}"
+                st.session_state["tc_cost_resident"]    = f"${total_c * 0.60:,.2f}"
+                st.session_state["tc_cost_city"]        = f"${total_c * 0.40:,.2f}"
+                st.markdown(f"**10% Contingency:** ${conting:,.2f}")
+                st.markdown(f"**Total Estimated:** ${total_c:,.2f}")
+            except Exception:
+                st.markdown("**Total:** —")
+        with col3:
+            if "Local" in street_class:
+                st.markdown(f"**Resident Share (60%):** {ss('tc_cost_resident')}")
+                st.markdown(f"**City Share (40%):** {ss('tc_cost_city')}")
+                st.caption(
+                    "Petition expires if 60% payment not received within 6 months of "
+                    "Board approval."
+                )
+            elif "Collector" in street_class:
+                st.markdown(
+                    "**Funding:** 100% City-funded *(subject to normal budget process)*"
+                )
+        st.session_state["tc_c_cost_payment"] = st.checkbox(
+            "Resident 60% payment received prior to installation "
+            "(local streets — must be within 6 months of Board approval)  *[Part VII]*",
+            value=bool(ss("tc_c_cost_payment", False)), key="chk_cpmt",
+        )
+        st.session_state["tc_cost_notes"] = st.text_area(
+            "Cost / Funding Notes",
+            value=ss("tc_cost_notes"), height=60, key="ta_costnotes",
+        )
+
+    # =========================================================================
+    # SECTION VIII: BOARD ACTION
+    # =========================================================================
+    with st.expander(
+        "VIII. Public Meeting & Board of Commissioners Action", expanded=False
+    ):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state["tc_public_meeting_date"] = st.text_input(
+                "Public Meeting Date  *[Part V–b–2]*",
+                value=ss("tc_public_meeting_date"), key="inp_pmdate",
+            )
+            st.session_state["tc_board_date"] = st.text_input(
+                "Board Meeting Date  *[Part VII]*",
+                value=ss("tc_board_date"), key="inp_bdate",
+            )
+        with col2:
+            st.session_state["tc_public_meeting_notes"] = st.text_input(
+                "Public Meeting Summary / Outcome",
+                value=ss("tc_public_meeting_notes"), key="inp_pmnotes",
+            )
+            st.session_state["tc_board_res_num"] = st.text_input(
+                "Board Resolution Number  *[Part VII]*",
+                value=ss("tc_board_res_num"), key="inp_bresnum",
+                placeholder="e.g. Resolution 2026-XX",
+            )
+        st.session_state["tc_c_public_meeting"] = st.checkbox(
+            "Public meeting scheduled by staff after ≥2/3 petition support received  "
+            "*[Part V–b–2]*",
+            value=bool(ss("tc_c_public_meeting", False)), key="chk_pm",
+        )
+        st.session_state["tc_c_public_conducted"] = st.checkbox(
+            "Public meeting conducted; input documented  *[Part V–b–2]*",
+            value=bool(ss("tc_c_public_conducted", False)), key="chk_pmc",
+        )
+        st.session_state["tc_c_staff_rec"] = st.checkbox(
+            "Staff recommendation prepared for Board, incorporating petition results "
+            "and public meeting input  *[Part V–b–2 / VII]*",
+            value=bool(ss("tc_c_staff_rec", False)), key="chk_sr",
+        )
+        st.session_state["tc_c_board_res"] = st.checkbox(
+            "Board resolution approving proposed location(s) adopted PRIOR to installation  "
+            "*[Part VII]*",
+            value=bool(ss("tc_c_board_res", False)), key="chk_br",
+        )
+        st.session_state["tc_c_board_action"] = st.checkbox(
+            "Board action recorded and outcome documented  *[Part VII]*",
+            value=bool(ss("tc_c_board_action", False)), key="chk_ba",
+        )
+        st.session_state["tc_c_design_final"] = st.checkbox(
+            "Final design complete; City Engineer drainage review done at all locations  "
+            "*[Part VII]*",
+            value=bool(ss("tc_c_design_final", False)), key="chk_df",
+        )
+        st.session_state["tc_c_payment_rcvd"] = st.checkbox(
+            "Resident 60% payment received before construction begins "
+            "(expires 6 months after Board approval)  *[Part VII]*",
+            value=bool(ss("tc_c_payment_rcvd", False)), key="chk_pr",
+        )
+        st.session_state["tc_c_installed"] = st.checkbox(
+            "Improvements installed / constructed",
+            value=bool(ss("tc_c_installed", False)), key="chk_ins",
+        )
+        st.session_state["tc_c_archived"] = st.checkbox(
+            "Complete application file archived "
+            "(petitions, study, Board resolution, cost records)",
+            value=bool(ss("tc_c_archived", False)), key="chk_arc",
+        )
+        st.session_state["tc_c_leftover_funds"] = st.checkbox(
+            "Any leftover funds returned to petitioning group upon project completion  "
+            "*[Part VII]*",
+            value=bool(ss("tc_c_leftover_funds", False)), key="chk_lf",
+        )
+        st.session_state["tc_staff_rec_notes"] = st.text_area(
+            "Staff Recommendation Summary",
+            value=ss("tc_staff_rec_notes"), height=80, key="ta_staffrec",
+        )
+        st.session_state["tc_final_notes"] = st.text_area(
+            "Final / Closeout Notes",
+            value=ss("tc_final_notes"), height=60, key="ta_finalnotes",
+        )
+
+    # =========================================================================
+    # EXPORT / CLEAR BUTTONS
+    # =========================================================================
+    st.divider()
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if st.button(
+            "📄 Generate Word Document — Checklist + Action Items",
+            type="primary",
+            use_container_width=True,
+            key="btn_tc_export",
+        ):
+            data = {k: v for k, v in st.session_state.items() if k.startswith("tc_")}
+            try:
+                buf = build_traffic_calming_report(data)
+                street_raw  = st.session_state.get("tc_street_name") or "TC_Review"
+                street_safe = (
+                    street_raw.replace(" ", "_")
+                              .replace("/", "-")
+                              .replace("(", "")
+                              .replace(")", "")[:35]
+                )
+                filename = (
+                    f"TC_Review_{street_safe}_"
+                    f"{datetime.now(_CT).strftime('%Y%m%d')}.docx"
+                )
+                st.download_button(
+                    label="⬇ Click to Download Word Document",
+                    data=buf,
+                    file_name=filename,
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument"
+                        ".wordprocessingml.document"
+                    ),
+                    use_container_width=True,
+                    key="btn_tc_download",
+                )
+            except Exception as e:
+                st.error(f"Error generating document: {e}")
+    with col2:
+        if st.button(
+            "🗑️ Clear TC Form",
+            use_container_width=True,
+            key="btn_tc_clear",
+        ):
+            keys_to_clear = [
+                k for k in list(st.session_state.keys()) if k.startswith("tc_")
+            ]
+            for k in keys_to_clear:
+                del st.session_state[k]
+            st.rerun()
+
+
 def main():
     """Main function for Wizard Mode"""
     initialize_session_state()
@@ -717,10 +1736,18 @@ def main():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
+        # Traffic Calming Application is appended at the end of the permit type list.
+        # It routes to a separate form (render_traffic_calming_wizard) rather than
+        # the standard Yes/No checklist loop used by all other review types.
+        ALL_REVIEW_TYPES = REVIEW_TYPES + ["Traffic Calming Application"]
+
         review_type = st.selectbox(
             "Review Type",
-            options=[""] + REVIEW_TYPES,
-            index=0 if not st.session_state.wizard_review_type else REVIEW_TYPES.index(st.session_state.wizard_review_type) + 1,
+            options=[""] + ALL_REVIEW_TYPES,
+            index=0 if not st.session_state.wizard_review_type else (
+                ALL_REVIEW_TYPES.index(st.session_state.wizard_review_type) + 1
+                if st.session_state.wizard_review_type in ALL_REVIEW_TYPES else 0
+            ),
             key="review_type_select"
         )
         
@@ -757,6 +1784,19 @@ def main():
     
     if not st.session_state.wizard_review_type:
         st.markdown('<div class="bw-status-warn">Select a review type above to begin the checklist.</div>', unsafe_allow_html=True)
+        return
+
+    # ── Traffic Calming Application routes to its own separate form ──────────
+    # All other review types use the standard Yes/No checklist below.
+    if st.session_state.wizard_review_type == "Traffic Calming Application":
+        if TC_AVAILABLE:
+            render_traffic_calming_wizard()
+        else:
+            st.error(
+                "Traffic Calming modules not found in utils/. "
+                "Please upload traffic_calming_data.py and traffic_calming_report.py "
+                "to the utils/ folder in your GitHub repository."
+            )
         return
     
     # =========================================================================
