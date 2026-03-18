@@ -717,10 +717,11 @@ def _render_checklist():
 
 def _tc_init():
     """
-    Pre-populate all tc_ session state keys with correct types before any
-    widget renders. This prevents the 'value must be a string/bool' errors
-    that occur when Streamlit finds a key with the wrong type on re-render.
-    Strings default to "", booleans to False.
+    Ensure all tc_ session state keys exist with the correct Python type.
+    Enforces types even if the key already exists — this prevents
+    'Values for st.text_area have to be strings' errors that occur when
+    a key exists but holds the wrong type (e.g. bool instead of str).
+    Preserves existing correct-type values; only fixes wrong-type ones.
     """
     str_keys = [
         "tc_case_num", "tc_app_date", "tc_street_class", "tc_street_name",
@@ -730,6 +731,7 @@ def _tc_init():
         "tc_eligible_res", "tc_sigs_received", "tc_init_pct",
         "tc_problem_desc", "tc_data_85th", "tc_data_limit", "tc_data_adt",
         "tc_data_crashes", "tc_data_cutthru", "tc_speed_excess",
+        "tc_speed_excess_raw",
         "tc_data_school_route", "tc_data_sidewalk_status", "tc_data_notes",
         "tc_local_adt", "tc_local_adt_proj", "tc_local_width",
         "tc_local_grade", "tc_local_spd_limit",
@@ -742,7 +744,6 @@ def _tc_init():
         "tc_public_meeting_date", "tc_public_meeting_notes",
         "tc_board_date", "tc_board_res_num",
         "tc_staff_rec_notes", "tc_final_notes",
-        "tc_speed_excess_raw",
     ]
     bool_keys = [
         "tc_c_hoa_gov", "tc_c_hoa_req", "tc_c_init_pet", "tc_c_pet_format",
@@ -768,19 +769,21 @@ def _tc_init():
         "tc_c_payment_rcvd", "tc_c_installed", "tc_c_archived",
         "tc_c_leftover_funds",
     ]
+    # Enforce string type: set to "" if absent OR if wrong type
     for k in str_keys:
-        if k not in st.session_state:
+        if k not in st.session_state or not isinstance(st.session_state[k], str):
             st.session_state[k] = ""
+    # Enforce bool type: set to False if absent OR if wrong type
     for k in bool_keys:
-        if k not in st.session_state:
+        if k not in st.session_state or not isinstance(st.session_state[k], bool):
             st.session_state[k] = False
-    if "tc_t2_strategies" not in st.session_state:
+    if "tc_t2_strategies" not in st.session_state or not isinstance(st.session_state["tc_t2_strategies"], list):
         st.session_state["tc_t2_strategies"] = []
     if "tc_total_score" not in st.session_state:
         st.session_state["tc_total_score"] = 0
     for crit in SCORING_CRITERIA:
         k = f"tc_score_{crit['id']}"
-        if k not in st.session_state:
+        if k not in st.session_state or not isinstance(st.session_state[k], (int, float)):
             st.session_state[k] = 0
 
 
@@ -840,11 +843,11 @@ def render_traffic_calming_wizard():
         else:
             st.session_state["tc_street_class"] = street_class
 
-        if "Collector" in street_class:
+        if street_class == "Collector Street":
             st.success("✓ **Collector Street** — Traffic Calming Policy (Part V). 100% City-funded.")
-        elif "Local" in street_class:
+        elif street_class == "Local Residential Street":
             st.info("ℹ **Local Street** — Speed Hump Policy (Part VII). Residents pay 60% of costs.")
-        elif "Arterial" in street_class:
+        elif street_class == "Arterial Street":
             st.warning("⚠ **Arterial Street** — Standard calming policy does NOT apply. Engineering study required.")
 
         st.markdown("**Step 2 — Street Name**")
@@ -852,7 +855,7 @@ def render_traffic_calming_wizard():
         # IMPORTANT: tc_street_name is always a plain data key, never a widget key.
         # Each classification uses its own stable widget key so Streamlit never
         # sees a conflict when the user switches between classification types.
-        if "Arterial" in street_class:
+        if street_class == "Arterial Street":
             art_opts = ["-- Select Arterial --"] + ARTERIAL_STREETS
             cur_art = st.session_state.get("tc_street_name", "")
             chosen_art = st.selectbox(
@@ -865,7 +868,7 @@ def render_traffic_calming_wizard():
                 "" if chosen_art == "-- Select Arterial --" else chosen_art
             )
 
-        elif "Collector" in street_class:
+        elif street_class == "Collector Street":
             col_opts = ["-- Select Collector --"] + COLLECTOR_STREETS
             cur_col = st.session_state.get("tc_street_name", "")
             chosen_col = st.selectbox(
@@ -878,7 +881,7 @@ def render_traffic_calming_wizard():
                 "" if chosen_col == "-- Select Collector --" else chosen_col
             )
 
-        elif "Local" in street_class:
+        elif street_class == "Local Residential Street":
             # Use a separate key (tc_street_name_input) for the widget so it is
             # never confused with the data key (tc_street_name). Sync them below.
             if "tc_street_name_input" not in st.session_state:
@@ -975,7 +978,7 @@ def render_traffic_calming_wizard():
                     key="tc_c_not_private")
         st.checkbox("Confirmed NOT a designated primary emergency route  [Part V]",
                     key="tc_c_not_emergency")
-        if "Collector" in street_class:
+        if street_class == "Collector Street":
             st.checkbox("Collector: verified on City identified residential collector street list  [Part V]",
                         key="tc_c_collector_list")
             st.caption("Residential collector list per Resolution 2026-12 Part V: Arrowhead Dr, Belle Rive Dr, "
@@ -1004,7 +1007,7 @@ def render_traffic_calming_wizard():
                 st.session_state["tc_speed_excess_raw"] = str(excess_val)
                 color = "green" if excess_val >= 8 else "red"
                 st.markdown(f"**Speed Excess:** :{color}[{excess_str}]")
-                if "Collector" in street_class and excess_val < 8:
+                if street_class == "Collector Street" and excess_val < 8:
                     st.caption("Collector criterion: 8 mph over limit required [Part V-a]")
             except Exception:
                 st.markdown("**Speed Excess:** -")
@@ -1043,7 +1046,7 @@ def render_traffic_calming_wizard():
     # =========================================================================
     # SECTION IV: STREET-TYPE SPECIFIC
     # =========================================================================
-    if "Collector" in street_class:
+    if street_class == "Collector Street":
         with st.expander("IV. Traffic Calming - Collector Street Criteria (Part V)", expanded=False):
             st.markdown("**Roadway Eligibility Criteria - All must be met [Part V-a]**")
             try:
@@ -1075,7 +1078,7 @@ def render_traffic_calming_wizard():
             st.checkbox("Study outlines applicable Tier 2 strategies for this location  [Part V-b-1]",
                         key="tc_c_coll_study_t2")
 
-    elif "Local" in street_class:
+    elif street_class == "Local Residential Street":
         with st.expander("IV. Speed Hump Eligibility - Local Street (Part VII)", expanded=False):
             st.markdown("**Street Eligibility Criteria - All must be met [Part VII]**")
             col1, col2, col3 = st.columns(3)
@@ -1128,7 +1131,7 @@ def render_traffic_calming_wizard():
     # SECTION V: TIER 1
     # =========================================================================
     with st.expander("V. Tier 1 - Non-Construction Strategies (Part V-b-1)", expanded=False):
-        if "Local" in street_class:
+        if street_class == "Local Residential Street":
             st.info("Less dramatic measures such as signs and striping must be evaluated first. "
                     "Reevaluate 6 months after installation before final speed hump decision.  [Part VII]")
         col1, col2 = st.columns(2)
@@ -1157,7 +1160,7 @@ def render_traffic_calming_wizard():
     # SECTION VI: TIER 2 / SECOND PETITION
     # =========================================================================
     with st.expander("VI. Tier 2 / Speed Humps - Second Petition (Parts V-b-2; VII)", expanded=False):
-        if "Collector" in street_class:
+        if street_class == "Collector Street":
             st.caption("Speed humps are NOT eligible on designated collector roads.  [Part V-b Tier 2 Note]")
 
         st.markdown("**Tier 2 Strategies Proposed [Part V-b Tier 2]**")
@@ -1221,7 +1224,7 @@ def render_traffic_calming_wizard():
         st.caption("Per Resolution 2026-12 Section 3: petitions with votes within 12 months before "
                    "adoption (02/09/2026) use a 12-month moratorium only.")
 
-        if "Local" in street_class:
+        if street_class == "Local Residential Street":
             st.markdown("**Cost-Share Agreement - Local Streets [Part VII]**")
             st.checkbox("Petition signed by 2/3 or more of households agreeing to pay 60% of direct costs  [Part VII]",
                         key="tc_c_costshare_agree")
@@ -1232,7 +1235,7 @@ def render_traffic_calming_wizard():
     # SECTION VII: COST & PRIORITIZATION
     # =========================================================================
     with st.expander("VII. Cost Estimates & Prioritization Scoring", expanded=False):
-        if "Collector" in street_class:
+        if street_class == "Collector Street":
             st.markdown("**Tier 2 Prioritization Scoring [Part V-b-3 - used when multiple Tier 2 requests are pending]**")
             total_score = 0
             for crit in SCORING_CRITERIA:
@@ -1264,11 +1267,11 @@ def render_traffic_calming_wizard():
             except Exception:
                 st.markdown("**Total:** -")
         with col3:
-            if "Local" in street_class:
+            if street_class == "Local Residential Street":
                 st.markdown(f"**Resident Share (60%):** {st.session_state.get('tc_cost_resident', '-')}")
                 st.markdown(f"**City Share (40%):** {st.session_state.get('tc_cost_city', '-')}")
                 st.caption("Petition expires if 60% payment not received within 6 months of Board approval.")
-            elif "Collector" in street_class:
+            elif street_class == "Collector Street":
                 st.markdown("**Funding:** 100% City-funded (subject to normal budget process)")
 
         st.checkbox("Resident 60% payment received prior to installation "
