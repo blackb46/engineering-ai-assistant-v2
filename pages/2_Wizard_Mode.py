@@ -792,7 +792,9 @@ def render_traffic_calming_wizard():
         st.session_state["tc_street_class"] = (
             "" if new_class == "— Select —" else new_class
         )
-        street_class = st.session_state["tc_street_class"]
+        # Use new_class directly (not session state) so the street name widget
+        # renders correctly on the same rerun as the classification change.
+        street_class = "" if new_class == "— Select —" else new_class
 
         # Policy notice
         if "Collector" in street_class:
@@ -978,7 +980,7 @@ def render_traffic_calming_wizard():
         )
         st.session_state["tc_problem_desc"] = st.text_area(
             "Description of Perceived Problem / Safety Concern",
-            value=ss("tc_problem_desc"),
+            value=str(ss("tc_problem_desc") or ""),
             height=80,
             key="ta_tc_problem",
         )
@@ -1114,7 +1116,7 @@ def render_traffic_calming_wizard():
         )
         st.session_state["tc_data_notes"] = st.text_area(
             "Data Collection Notes / Summary",
-            value=ss("tc_data_notes"),
+            value=str(ss("tc_data_notes") or ""),
             height=80,
             key="ta_tc_data_notes",
         )
@@ -1371,7 +1373,7 @@ def render_traffic_calming_wizard():
             )
         st.session_state["tc_t1_notes"] = st.text_area(
             "Tier 1 Notes (strategies applied, effectiveness findings)",
-            value=ss("tc_t1_notes"), height=80, key="ta_t1notes",
+            value=str(ss("tc_t1_notes") or ""), height=80, key="ta_t1notes",
         )
 
     # =========================================================================
@@ -1581,7 +1583,7 @@ def render_traffic_calming_wizard():
         )
         st.session_state["tc_cost_notes"] = st.text_area(
             "Cost / Funding Notes",
-            value=ss("tc_cost_notes"), height=60, key="ta_costnotes",
+            value=str(ss("tc_cost_notes") or ""), height=60, key="ta_costnotes",
         )
 
     # =========================================================================
@@ -1659,11 +1661,11 @@ def render_traffic_calming_wizard():
         )
         st.session_state["tc_staff_rec_notes"] = st.text_area(
             "Staff Recommendation Summary",
-            value=ss("tc_staff_rec_notes"), height=80, key="ta_staffrec",
+            value=str(ss("tc_staff_rec_notes") or ""), height=80, key="ta_staffrec",
         )
         st.session_state["tc_final_notes"] = st.text_area(
             "Final / Closeout Notes",
-            value=ss("tc_final_notes"), height=60, key="ta_finalnotes",
+            value=str(ss("tc_final_notes") or ""), height=60, key="ta_finalnotes",
         )
 
     # =========================================================================
@@ -1757,23 +1759,31 @@ def main():
             st.rerun()
         elif review_type:
             st.session_state.wizard_review_type = review_type
-    
+
+    # For Traffic Calming, only show Reviewer in col2 — permit number and address
+    # are captured inside the TC form itself (case number, street, petitioner).
+    is_tc = (st.session_state.wizard_review_type == "Traffic Calming Application")
+
     with col2:
-        permit_number = st.text_input(
-            "Permit Number",
-            value=st.session_state.wizard_permit_number,
-            placeholder="e.g., SW2024-001"
-        )
-        st.session_state.wizard_permit_number = permit_number
-    
+        if not is_tc:
+            permit_number = st.text_input(
+                "Permit Number",
+                value=st.session_state.wizard_permit_number,
+                placeholder="e.g., SW2024-001"
+            )
+            st.session_state.wizard_permit_number = permit_number
+        # col2 intentionally blank for TC (permit info lives in the TC form)
+
     with col3:
-        address = st.text_input(
-            "Address",
-            value=st.session_state.wizard_address,
-            placeholder="e.g., 1808 Sonoma Trce"
-        )
-        st.session_state.wizard_address = address
-    
+        if not is_tc:
+            address = st.text_input(
+                "Address",
+                value=st.session_state.wizard_address,
+                placeholder="e.g., 1808 Sonoma Trce"
+            )
+            st.session_state.wizard_address = address
+        # col3 intentionally blank for TC
+
     with col4:
         reviewer = st.selectbox(
             "Reviewer",
