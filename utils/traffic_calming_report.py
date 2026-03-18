@@ -132,8 +132,9 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
 
     # Derive key values used throughout
     street_class = get("tc_street_class")
-    is_collector = "Collector" in street_class
-    is_local     = "Local" in street_class
+    is_collector = street_class == "Collector Street"
+    is_local     = street_class == "Local Residential Street"
+    is_arterial  = street_class == "Arterial Street"
     is_arterial  = "Arterial" in street_class
 
     # ── TITLE BLOCK ────────────────────────────────────────────────────────

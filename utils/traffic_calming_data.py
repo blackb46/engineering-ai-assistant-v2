@@ -125,7 +125,7 @@ RESIDENTIAL_COLLECTOR_STREETS = [
 STREET_CLASSIFICATIONS = {
     "Arterial Street":                       "arterial",   # Part I/II stop sign warrants only
     "Collector Street":                      "collector",  # Part V calming — 100% City funded
-    "Local (Non-Collector) Residential":     "local",      # Part VII speed humps — 60% cost-share
+    "Local Residential Street":              "local",      # Part VII speed humps — 60% cost-share
 }
 
 # ==============================================================================
