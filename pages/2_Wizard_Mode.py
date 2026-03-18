@@ -1273,7 +1273,7 @@ def render_traffic_calming_wizard():
         st.checkbox("Resident 60% payment received prior to installation "
                     "(local streets - must be within 6 months of Board approval)  [Part VII]",
                     key="tc_c_cost_payment")
-        st.text_area("Cost / Funding Notes", key="tc_cost_notes", height=60)
+        st.text_area("Cost / Funding Notes", key="tc_cost_notes", height=100)
 
     # =========================================================================
     # SECTION VIII: BOARD ACTION
@@ -1305,7 +1305,7 @@ def render_traffic_calming_wizard():
         st.checkbox("Any leftover funds returned to petitioning group upon project completion  [Part VII]",
                     key="tc_c_leftover_funds")
         st.text_area("Staff Recommendation Summary", key="tc_staff_rec_notes", height=80)
-        st.text_area("Final / Closeout Notes", key="tc_final_notes", height=60)
+        st.text_area("Final / Closeout Notes", key="tc_final_notes", height=100)
 
     # =========================================================================
     # EXPORT / CLEAR
