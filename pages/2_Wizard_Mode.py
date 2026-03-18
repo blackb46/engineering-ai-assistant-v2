@@ -818,16 +818,21 @@ def render_traffic_calming_wizard():
             options=class_opts,
             index=safe_idx(class_opts, prev_class),
             key="tc_street_class_sel",
-            help="Arterial/Collector show City-designated street lists. Local = free text entry.",
+            help="Arterial/Collector show City-designated street lists. Local = free text.",
         )
         street_class = "" if chosen_class == "-- Select --" else chosen_class
 
-        # When classification changes, clear the stored street name so the new
-        # widget doesn't inherit a value from the previous classification type.
+        # When classification changes, store the new class and trigger a rerun
+        # so old widget keys are no longer in the widget tree before we clear them.
+        # Never write directly to tc_street_name_input — that's a widget-bound key.
         if street_class != prev_class:
             st.session_state["tc_street_class"] = street_class
-            st.session_state["tc_street_name"] = ""
-            st.session_state["tc_street_name_input"] = ""
+            st.session_state["tc_street_name"]  = ""
+            # Remove the old Local text_input widget key from session state
+            # ONLY if it isn't currently the active widget (i.e. we're switching away).
+            if "tc_street_name_input" in st.session_state and street_class != "Local Residential Street":
+                del st.session_state["tc_street_name_input"]
+            st.rerun()
         else:
             st.session_state["tc_street_class"] = street_class
 
@@ -840,49 +845,46 @@ def render_traffic_calming_wizard():
 
         st.markdown("**Step 2 — Street Name**")
 
-        # IMPORTANT: tc_street_name is always a plain data key, never a widget key.
-        # Each classification uses its own stable widget key so Streamlit never
-        # sees a conflict when the user switches between classification types.
         if street_class == "Arterial Street":
             art_opts = ["-- Select Arterial --"] + ARTERIAL_STREETS
-            cur_art = st.session_state.get("tc_street_name", "")
             chosen_art = st.selectbox(
                 "Arterial Street (Municipal Code — Arterial Designation)",
                 options=art_opts,
-                index=safe_idx(art_opts, cur_art),
+                index=safe_idx(art_opts, st.session_state.get("tc_street_name", "")),
                 key="tc_street_name_art",
             )
-            st.session_state["tc_street_name"] = (
-                "" if chosen_art == "-- Select Arterial --" else chosen_art
-            )
+            # Store into a non-widget-bound data key
+            new_name = "" if chosen_art == "-- Select Arterial --" else chosen_art
+            if new_name != st.session_state.get("tc_street_name", ""):
+                st.session_state["tc_street_name"] = new_name
 
         elif street_class == "Collector Street":
             col_opts = ["-- Select Collector --"] + COLLECTOR_STREETS
-            cur_col = st.session_state.get("tc_street_name", "")
             chosen_col = st.selectbox(
                 "Collector Street (Municipal Code — Collector Designation)",
                 options=col_opts,
-                index=safe_idx(col_opts, cur_col),
+                index=safe_idx(col_opts, st.session_state.get("tc_street_name", "")),
                 key="tc_street_name_col",
             )
-            st.session_state["tc_street_name"] = (
-                "" if chosen_col == "-- Select Collector --" else chosen_col
-            )
+            new_name = "" if chosen_col == "-- Select Collector --" else chosen_col
+            if new_name != st.session_state.get("tc_street_name", ""):
+                st.session_state["tc_street_name"] = new_name
 
         elif street_class == "Local Residential Street":
-            # Use a separate key (tc_street_name_input) for the widget so it is
-            # never confused with the data key (tc_street_name). Sync them below.
-            if "tc_street_name_input" not in st.session_state:
-                st.session_state["tc_street_name_input"] = st.session_state.get("tc_street_name", "")
-            entered = st.text_input(
+            # tc_street_name_input is the widget key — never write to it directly.
+            # Streamlit manages its value. We read it back into tc_street_name
+            # only when the value has changed, using a safe get (not assignment).
+            st.text_input(
                 "Local Street Name (enter manually)",
                 key="tc_street_name_input",
                 placeholder="e.g. Oakwood Court",
             )
-            st.session_state["tc_street_name"] = entered
+            # Sync widget value → data store using a non-widget key
+            current_input = st.session_state.get("tc_street_name_input", "")
+            if current_input != st.session_state.get("tc_street_name", ""):
+                st.session_state["tc_street_name"] = current_input
 
         else:
-            # Nothing selected yet — show a disabled placeholder, no key conflict
             st.text_input(
                 "Street Name (select classification above first)",
                 value="",
