@@ -717,32 +717,30 @@ def _render_checklist():
 
 def _tc_init():
     """
-    Ensure all tc_ session state keys exist with the correct Python type.
-    Enforces types even if the key already exists — this prevents
-    'Values for st.text_area have to be strings' errors that occur when
-    a key exists but holds the wrong type (e.g. bool instead of str).
-    Preserves existing correct-type values; only fixes wrong-type ones.
+    Initialize all tc_ session state keys before widgets render.
+    Uses setdefault() throughout — this is the only safe initialization
+    pattern for widget-bound keys in Streamlit >= 1.30.
+    Direct assignment (st.session_state[key] = value) raises
+    StreamlitAPIException when the key is already claimed by a widget.
+    setdefault() is a no-op when the key already exists, so it never
+    conflicts with a widget that has already written its value.
     """
     str_keys = [
         "tc_case_num", "tc_app_date", "tc_street_class", "tc_street_name",
-        "tc_street_name_input",
-        "tc_street_segment", "tc_seg_length", "tc_app_type",
-        "tc_petitioner_name", "tc_petitioner_contact", "tc_hoa_status",
-        "tc_eligible_res", "tc_sigs_received", "tc_init_pct",
+        "tc_street_name_input", "tc_street_segment", "tc_seg_length",
+        "tc_app_type", "tc_petitioner_name", "tc_petitioner_contact",
+        "tc_hoa_status", "tc_eligible_res", "tc_sigs_received", "tc_init_pct",
         "tc_problem_desc", "tc_data_85th", "tc_data_limit", "tc_data_adt",
         "tc_data_crashes", "tc_data_cutthru", "tc_speed_excess",
-        "tc_speed_excess_raw",
-        "tc_data_school_route", "tc_data_sidewalk_status", "tc_data_notes",
-        "tc_local_adt", "tc_local_adt_proj", "tc_local_width",
-        "tc_local_grade", "tc_local_spd_limit",
-        "tc_t1_date", "tc_t1_review_date", "tc_t1_notes",
-        "tc_pet2_total", "tc_pet2_yes", "tc_pet2_pct",
-        "tc_pet2_mail", "tc_pet2_deadline",
-        "tc_moratorium_start", "tc_moratorium_end",
-        "tc_cost_direct", "tc_cost_contingency", "tc_cost_total",
-        "tc_cost_resident", "tc_cost_city", "tc_cost_notes",
-        "tc_public_meeting_date", "tc_public_meeting_notes",
-        "tc_board_date", "tc_board_res_num",
+        "tc_speed_excess_raw", "tc_data_school_route", "tc_data_sidewalk_status",
+        "tc_data_notes", "tc_local_adt", "tc_local_adt_proj", "tc_local_width",
+        "tc_local_grade", "tc_local_spd_limit", "tc_t1_date",
+        "tc_t1_review_date", "tc_t1_notes", "tc_pet2_total", "tc_pet2_yes",
+        "tc_pet2_pct", "tc_pet2_mail", "tc_pet2_deadline",
+        "tc_moratorium_start", "tc_moratorium_end", "tc_cost_direct",
+        "tc_cost_contingency", "tc_cost_total", "tc_cost_resident",
+        "tc_cost_city", "tc_cost_notes", "tc_public_meeting_date",
+        "tc_public_meeting_notes", "tc_board_date", "tc_board_res_num",
         "tc_staff_rec_notes", "tc_final_notes",
     ]
     bool_keys = [
@@ -757,34 +755,24 @@ def _tc_init():
         "tc_c_local_notarterial", "tc_c_local_cutthru", "tc_c_local_connection",
         "tc_c_hump_spacing", "tc_c_hump_clearance", "tc_c_hump_dims",
         "tc_c_hump_signage", "tc_c_hump_warn", "tc_c_hump_markings",
-        "tc_c_hump_drainage",
-        "tc_c_t1_study", "tc_c_t1_petitioner", "tc_c_t1_implemented",
-        "tc_c_t1_effective", "tc_c_t1_ineffective",
+        "tc_c_hump_drainage", "tc_c_t1_study", "tc_c_t1_petitioner",
+        "tc_c_t1_implemented", "tc_c_t1_effective", "tc_c_t1_ineffective",
         "tc_c_t2_validate", "tc_c_t2_trafficeng", "tc_c_t2_sep_petition",
-        "tc_c_pet2_mailed", "tc_c_pet2_hoa", "tc_c_pet2_nonresp",
-        "tc_pet2_ext",
+        "tc_c_pet2_mailed", "tc_c_pet2_hoa", "tc_c_pet2_nonresp", "tc_pet2_ext",
         "tc_c_costshare_agree", "tc_c_hoa_letter", "tc_c_cost_payment",
         "tc_c_public_meeting", "tc_c_public_conducted", "tc_c_staff_rec",
         "tc_c_board_res", "tc_c_board_action", "tc_c_design_final",
         "tc_c_payment_rcvd", "tc_c_installed", "tc_c_archived",
         "tc_c_leftover_funds",
     ]
-    # Enforce string type: set to "" if absent OR if wrong type
     for k in str_keys:
-        if k not in st.session_state or not isinstance(st.session_state[k], str):
-            st.session_state[k] = ""
-    # Enforce bool type: set to False if absent OR if wrong type
+        st.session_state.setdefault(k, "")
     for k in bool_keys:
-        if k not in st.session_state or not isinstance(st.session_state[k], bool):
-            st.session_state[k] = False
-    if "tc_t2_strategies" not in st.session_state or not isinstance(st.session_state["tc_t2_strategies"], list):
-        st.session_state["tc_t2_strategies"] = []
-    if "tc_total_score" not in st.session_state:
-        st.session_state["tc_total_score"] = 0
+        st.session_state.setdefault(k, False)
+    st.session_state.setdefault("tc_t2_strategies", [])
+    st.session_state.setdefault("tc_total_score", 0)
     for crit in SCORING_CRITERIA:
-        k = f"tc_score_{crit['id']}"
-        if k not in st.session_state or not isinstance(st.session_state[k], (int, float)):
-            st.session_state[k] = 0
+        st.session_state.setdefault(f"tc_score_{crit['id']}", 0)
 
 
 
@@ -1258,13 +1246,19 @@ def render_traffic_calming_wizard():
                 direct  = float(st.session_state.get("tc_cost_direct") or 0)
                 conting = direct * 0.10
                 total_c = direct + conting
+                resident_share = total_c * 0.60
+                city_share     = total_c * 0.40
+                # Store computed values for the report builder (use setdefault-safe keys
+                # that are NOT widget keys, so direct assignment is always safe here)
                 st.session_state["tc_cost_contingency"] = f"${conting:,.2f}"
                 st.session_state["tc_cost_total"]       = f"${total_c:,.2f}"
-                st.session_state["tc_cost_resident"]    = f"${total_c * 0.60:,.2f}"
-                st.session_state["tc_cost_city"]        = f"${total_c * 0.40:,.2f}"
+                st.session_state["tc_cost_resident"]    = f"${resident_share:,.2f}"
+                st.session_state["tc_cost_city"]        = f"${city_share:,.2f}"
                 st.markdown(f"**10% Contingency:** ${conting:,.2f}")
                 st.markdown(f"**Total Estimated:** ${total_c:,.2f}")
             except Exception:
+                resident_share = 0
+                city_share = 0
                 st.markdown("**Total:** -")
         with col3:
             if street_class == "Local Residential Street":
