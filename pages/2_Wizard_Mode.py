@@ -857,9 +857,27 @@ def render_traffic_calming_wizard():
         safe = re.sub(r"_+", "_", safe).strip("_")
         return f"{safe}_progress.json"
 
+    # Keys that belong to Streamlit widgets internally and must never be
+    # saved or restored — writing to them via session state raises errors.
+    # Includes: the file uploader, all selectbox shadow keys (_sel suffix),
+    # and the street name placeholder key.
+    _WIDGET_ONLY_KEYS = {
+        "tc_load_uploader",
+        "tc_street_class_sel",
+        "tc_app_type_sel",
+        "tc_hoa_status_sel",
+        "tc_data_school_route_sel",
+        "tc_data_sidewalk_status_sel",
+        "tc_street_name_art",
+        "tc_street_name_col",
+        "tc_street_name_placeholder",
+    }
+
     def _save_tc_state() -> bytes:
         """
         Serialize all tc_ session state keys to JSON bytes.
+        Widget-bound keys (selectbox shadows, file uploader) are excluded —
+        they cannot be restored via session state without raising errors.
         datetime.date objects are stored as ISO strings with a __date__ marker
         so they can be round-tripped correctly on load.
         """
@@ -869,6 +887,8 @@ def render_traffic_calming_wizard():
         for k, v in st.session_state.items():
             if not k.startswith("tc_"):
                 continue
+            if k in _WIDGET_ONLY_KEYS:
+                continue  # never save widget-bound keys
             if isinstance(v, dt.date):
                 payload[k] = {"__date__": v.isoformat()}
             elif isinstance(v, (str, bool, int, float, list, type(None))):
@@ -880,6 +900,7 @@ def render_traffic_calming_wizard():
         """
         Restore tc_ session state from an uploaded JSON file.
         Converts __date__ markers back to datetime.date objects.
+        Widget-bound keys in the file are silently skipped.
         Returns (success: bool, message: str).
         """
         import json
@@ -893,16 +914,18 @@ def render_traffic_calming_wizard():
         if not isinstance(payload, dict):
             return False, "Invalid file format — expected a JSON object."
 
-        # Clear existing tc_ keys first so stale values don't linger
+        # Clear existing tc_ keys (except widget-bound ones — Streamlit owns those)
         for k in list(st.session_state.keys()):
-            if k.startswith("tc_"):
+            if k.startswith("tc_") and k not in _WIDGET_ONLY_KEYS:
                 del st.session_state[k]
 
-        # Restore values with correct types
+        # Restore values with correct types, skipping widget-bound keys
         loaded = 0
         for k, v in payload.items():
             if not k.startswith("tc_"):
                 continue
+            if k in _WIDGET_ONLY_KEYS:
+                continue  # never restore widget-bound keys
             if isinstance(v, dict) and "__date__" in v:
                 try:
                     st.session_state[k] = dt.date.fromisoformat(v["__date__"])
