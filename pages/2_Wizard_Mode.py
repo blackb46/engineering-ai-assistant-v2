@@ -889,7 +889,6 @@ def render_traffic_calming_wizard():
     # Includes: the file uploader, all selectbox shadow keys (_sel suffix),
     # and the street name placeholder key.
     _WIDGET_ONLY_KEYS = {
-        "tc_load_uploader",
         "tc_street_class_sel",
         "tc_app_type_sel",
         "tc_hoa_status_sel",
@@ -981,32 +980,32 @@ def render_traffic_calming_wizard():
                 )
 
         with load_col:
+            # Use a counter-based widget key so that after a successful load,
+            # incrementing the counter creates a BRAND NEW uploader widget with
+            # no file in it. This is the only reliable way to reset a Streamlit
+            # file uploader — deleting the session state key is not enough because
+            # Streamlit's internal widget cache retains the file across reruns,
+            # causing the load to re-fire on every edit and revert user changes.
+            _uploader_key = f"tc_load_uploader_{st.session_state.get('_tc_uploader_gen', 0)}"
             uploaded_json = st.file_uploader(
                 "Load saved progress (.json)",
                 type=["json"],
-                key="tc_load_uploader",
+                key=_uploader_key,
                 help="Upload a previously saved progress file to restore all form fields",
                 label_visibility="collapsed",
             )
-            # Only process the file if we haven't already loaded it this session.
-            # Without this guard, the file uploader keeps its file in memory across
-            # reruns even after its session state key is deleted. This causes
-            # _load_tc_state to fire on EVERY rerun (including when Generate is
-            # clicked), and the st.rerun() inside the load handler kills the
-            # Generate button's click state before it can execute.
-            if uploaded_json is not None and not st.session_state.get("_tc_load_done"):
+            if uploaded_json is not None:
                 ok, msg = _load_tc_state(uploaded_json)
                 if ok:
                     st.success(f"✓ {msg}")
-                    st.session_state["_tc_load_done"] = True
-                    if "tc_load_uploader" in st.session_state:
-                        del st.session_state["tc_load_uploader"]
+                    # Increment the counter — next render creates a fresh uploader
+                    # widget with no file, so the load cannot re-fire on edits
+                    st.session_state["_tc_uploader_gen"] = (
+                        st.session_state.get("_tc_uploader_gen", 0) + 1
+                    )
                     st.rerun()
                 else:
                     st.error(f"Load failed: {msg}")
-            elif uploaded_json is None:
-                # File was cleared by user — reset the flag so a new file can be loaded
-                st.session_state.pop("_tc_load_done", None)
 
     st.divider()
 
@@ -1384,15 +1383,9 @@ def render_traffic_calming_wizard():
         st.markdown("**Tier 2 Strategies Proposed [Part V-b Tier 2]**")
         t2_selected = []
         for strat, cite in TIER2_STRATEGIES:
-            # Generate a safe ASCII-only widget key from the strategy name.
-            # Must strip em dashes, en dashes, and any other non-ASCII characters
-            # because non-ASCII characters in Streamlit widget keys corrupt the
-            # WebSocket serialization and silently break other buttons on the page.
-            import re as _re
-            _slug = strat[:25].lower()
-            _slug = _slug.encode("ascii", "ignore").decode("ascii")  # strip non-ASCII
-            _slug = _re.sub(r"[^a-z0-9]+", "_", _slug).strip("_")
-            safe_key = f"tc_t2_{_slug}"
+            safe_key = ("tc_t2_"
+                        + strat[:25].replace(" ", "_").replace("/", "_")
+                                    .replace(",", "").replace("-", "").lower())
             if safe_key not in st.session_state:
                 st.session_state[safe_key] = False
             st.checkbox(f"{strat}  [{cite}]", key=safe_key)
@@ -1592,50 +1585,23 @@ def render_traffic_calming_wizard():
         # because the key persists in session state between renders.
         if st.button("Generate Word Document - Checklist + Action Items",
                      type="primary", use_container_width=True, key="btn_tc_export"):
-            import traceback as _tb, datetime as _dt, re as _re2
+            data = {k: v for k, v in st.session_state.items() if k.startswith("tc_")}
             try:
-                # Build data dict — everything inside try so errors are caught.
-                # Filter to safe types only; skip UploadedFile and widget objects.
-                # Also sanitize any keys with non-ASCII characters (em dashes etc.)
-                # that would corrupt Streamlit's WebSocket serialization.
-                data = {}
-                for k, v in st.session_state.items():
-                    if not k.startswith("tc_"):
-                        continue
-                    # Skip keys containing non-ASCII (they signal corrupt widget state)
-                    try:
-                        k.encode("ascii")
-                    except UnicodeEncodeError:
-                        continue
-                    if isinstance(v, (_dt.date, _dt.datetime,
-                                      str, bool, int, float,
-                                      list, dict, type(None))):
-                        data[k] = v
-
-                buf = build_traffic_calming_report(
-                    data,
-                    scoring_criteria=SCORING_CRITERIA if TC_AVAILABLE else [],
-                )
+                buf = build_traffic_calming_report(data)
                 street_raw  = st.session_state.get("tc_street_name") or "TC_Review"
-                street_safe = (_re2.sub(r"[^a-zA-Z0-9_\-]", "_", street_raw)[:35])
-                filename = (f"TC_Review_{street_safe}_"
-                            f"{datetime.now(_CT).strftime('%Y%m%d')}.docx")
+                street_safe = (street_raw.replace(" ", "_").replace("/", "-")
+                                         .replace("(", "").replace(")", "")[:35])
+                filename = f"TC_Review_{street_safe}_{datetime.now(_CT).strftime('%Y%m%d')}.docx"
+                # Store buffer bytes (not BytesIO) and filename in session state
                 st.session_state["_tc_doc_bytes"]    = buf.read()
                 st.session_state["_tc_doc_filename"] = filename
-                st.session_state.pop("_tc_doc_error", None)
-            except Exception:
+            except Exception as e:
+                import traceback
                 st.session_state.pop("_tc_doc_bytes", None)
-                st.session_state["_tc_doc_error"] = _tb.format_exc()
+                st.error(f"Error generating document: {e}")
+                st.code(traceback.format_exc())
 
-        # Persistent error — survives the rerun after button click
-        if st.session_state.get("_tc_doc_error"):
-            st.error("Report generation failed — details below:")
-            st.code(st.session_state["_tc_doc_error"])
-            if st.button("Dismiss error", key="btn_tc_err_dismiss"):
-                st.session_state.pop("_tc_doc_error", None)
-                st.rerun()
-
-        # Download button — only shown when a doc is ready
+        # Show download button whenever a generated doc is ready
         if st.session_state.get("_tc_doc_bytes"):
             st.download_button(
                 label="⬇ Download Word Document",
@@ -1651,10 +1617,6 @@ def render_traffic_calming_wizard():
                              if k.startswith("tc_") or k.startswith("_tc_")]
             for k in keys_to_clear:
                 del st.session_state[k]
-            # Also remove the download and save widget keys so the widget tree
-            # stays consistent — otherwise Streamlit shows stale download buttons
-            for k in ["btn_tc_download", "btn_tc_save_dl"]:
-                st.session_state.pop(k, None)
             st.rerun()
 
 
@@ -1680,15 +1642,9 @@ def main():
         for _k in list(st.session_state.keys()):
             if _k.startswith("tc_") and _k not in _SKIP:
                 del st.session_state[_k]
-        # Write loaded values directly — safe here because no widgets exist yet.
-        # Skip keys containing non-ASCII characters (e.g. em dashes from old JSON
-        # files) — these corrupt Streamlit's WebSocket serialization.
+        # Write loaded values directly — safe here because no widgets exist yet
         for _k, _v in _payload.items():
             if not _k.startswith("tc_") or _k in _SKIP:
-                continue
-            try:
-                _k.encode("ascii")  # skip non-ASCII keys
-            except UnicodeEncodeError:
                 continue
             if isinstance(_v, dict) and "__date__" in _v:
                 try:
