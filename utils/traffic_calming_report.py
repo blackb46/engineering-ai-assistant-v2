@@ -169,7 +169,7 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
     # ── SECTION I: ADMINISTRATIVE ─────────────────────────────────────────
     h1("I. Administrative Review")
     kv("Case / File Number",    get("tc_case_num"))
-    kv("Application Date",      get("tc_app_date"))
+    kv("Application Date",      get("tc_app_date_str") or get("tc_app_date"))
     kv("Street Name",           get("tc_street_name"),    "Municipal Code — Street Classification")
     kv("Street Segment / Limits", get("tc_street_segment"))
     kv("Street Classification", get("tc_street_class"),   "Part V / VII")
@@ -284,8 +284,8 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
 
     # ── SECTION V: TIER 1 ────────────────────────────────────────────────
     h1("V. Tier 1 — Non-Construction Strategies (Part V–b–1)")
-    kv("Tier 1 Implementation Date",  get("tc_t1_date"),        "Part V–b–1")
-    kv("Six-Month Review Date",       get("tc_t1_review_date"), "Part V–b–1 (effectiveness review)")
+    kv("Tier 1 Implementation Date",  get("tc_t1_date_str") or get("tc_t1_date"),        "Part V–b–1")
+    kv("Six-Month Review Date",       get("tc_t1_review_date_str") or get("tc_t1_review_date"), "Part V–b–1 (effectiveness review)")
     tier1_outcome = (
         "Effective — no further action required" if is_checked("tc_c_t1_effective")
         else "Ineffective after 6 months — Tier 2 requested" if is_checked("tc_c_t1_ineffective")
@@ -316,9 +316,10 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
     kv("Total Households in Affected Area", get("tc_pet2_total"),    "Part V–b–2 / VII (within 600 ft)")
     kv("Yes Votes Received",                get("tc_pet2_yes"),      "Part V–b–2 / VII")
     kv("Support Percentage",                get("tc_pet2_pct"),      "≥66.7% (2/3) required")
-    kv("Petition Mail Date",                get("tc_pet2_mail"),     "Part V–b–2 / VII")
+    kv("Petition Mail Date",                get("tc_pet2_mail_str") or get("tc_pet2_mail"),     "Part V–b–2 / VII")
     kv("45-Day Response Deadline",          get("tc_pet2_deadline"), "Part V–b–2 / VII")
     kv("30-Day Extension Granted",          "Yes" if is_checked("tc_pet2_ext") else "No", "Part V–b–2 / VII")
+    kv("Last Day of Voting Window",         get("tc_moratorium_start_str") or get("tc_moratorium_start"), "Part V–b–2 / VII")
     kv("Moratorium End Date (if failed)",   get("tc_moratorium_end"),"Part V–b–2; Res. 2026-12 §3")
 
     checked("Second study confirms Tier 1 was ineffective",         is_checked("tc_c_t2_validate"),    "Part V–b–2")
@@ -363,9 +364,9 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
 
     # ── SECTION VIII: BOARD ACTION ────────────────────────────────────────
     h1("VIII. Public Meeting & Board of Commissioners Action")
-    kv("Public Meeting Date",    get("tc_public_meeting_date"),  "Part V–b–2")
+    kv("Public Meeting Date",    get("tc_public_meeting_date_str") or get("tc_public_meeting_date"),  "Part V–b–2")
     kv("Meeting Outcome",        get("tc_public_meeting_notes"))
-    kv("Board Meeting Date",     get("tc_board_date"),           "Part VII")
+    kv("Board Meeting Date",     get("tc_board_date_str") or get("tc_board_date"),           "Part VII")
     kv("Board Resolution No.",   get("tc_board_res_num"),        "Part VII")
     kv("Staff Recommendation",   get("tc_staff_rec_notes"),      "Part V–b–2 / VII")
     kv("Final / Closeout Notes", get("tc_final_notes"))
