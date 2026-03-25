@@ -149,7 +149,7 @@ TIER2_STRATEGIES = [
     ("Chicanes",                                             "Part V–b Tier 2"),
     ("Speed tables / raised crosswalks",                     "Part V–b Tier 2"),
     ("Textured pavements",                                   "Part V–b Tier 2"),
-    ("Speed humps — LOCAL STREETS ONLY, not collectors",     "Part V–b Tier 2 Note; Part VII"),
+    ("Speed humps - LOCAL STREETS ONLY, not collectors",     "Part V–b Tier 2 Note; Part VII"),
     ("Other strategy (requires City Commission approval)",   "Part V–b Tier 2"),
 ]
 
