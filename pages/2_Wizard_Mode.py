@@ -811,17 +811,26 @@ def render_traffic_calming_wizard():
         except ValueError:
             return 0
 
-    def tc_date(label, key, help_text=None):
+    def tc_date(label, key, help_text=None, override_value=None):
         """
         Render a date_input that stores a datetime.date or None.
         value=None renders as a blank optional field (Streamlit 1.38+).
         Also writes a formatted string to key + '_str' so the report builder
         can read it without needing to handle date objects.
+
+        override_value: pass a datetime.date to pre-fill the picker without
+        writing to session state directly (avoids the Streamlit warning about
+        setting a widget value via both value= and session state).
+        Only used when the field has not yet been set by the user.
         """
         import datetime as dt
+        # Determine the value to show: prefer what's already in session state
+        # (user's own selection), then fall back to override_value, then None.
+        current = st.session_state.get(key, None)
+        display_value = current if current is not None else override_value
         val = st.date_input(
             label,
-            value=st.session_state.get(key, None),
+            value=display_value,
             key=key,
             help=help_text,
             format="MM/DD/YYYY",
@@ -1163,10 +1172,11 @@ def render_traffic_calming_wizard():
             tc_date("Tier 1 Implementation Date", key="tc_t1_date")
         with col2:
             # Six-month review date auto-calculated from implementation date.
-            # Displayed as an informational marker; user can still set the date
-            # manually via the picker to record when the actual review occurred.
+            # Passed as override_value so Streamlit never sees a session state
+            # write conflict. User can select a different date to override.
             _t1_val = st.session_state.get("tc_t1_date")
-            if _t1_val and not st.session_state.get("tc_t1_review_date"):
+            _auto_review = None
+            if _t1_val:
                 import datetime as _dt
                 import calendar as _cal
                 _m = _t1_val.month + 6
@@ -1174,9 +1184,9 @@ def render_traffic_calming_wizard():
                 _m = (_m - 1) % 12 + 1
                 _d = min(_t1_val.day, _cal.monthrange(_y, _m)[1])
                 _auto_review = _dt.date(_y, _m, _d)
-                st.session_state["tc_t1_review_date"] = _auto_review
             tc_date("Six-Month Effectiveness Review Date", key="tc_t1_review_date",
-                    help_text="Auto-calculated as 6 months after implementation date. Select a different date to override.")
+                    help_text="Auto-calculated as 6 months after implementation date. Select a different date to override.",
+                    override_value=_auto_review)
         st.checkbox("Study recommendation includes one or more Tier 1 strategies  [Part V-b-1]",
                     key="tc_c_t1_study")
         st.checkbox("Staff met with petitioner to outline study recommendations  [Part V-b-1]",
