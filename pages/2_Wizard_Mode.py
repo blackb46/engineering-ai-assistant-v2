@@ -988,16 +988,25 @@ def render_traffic_calming_wizard():
                 help="Upload a previously saved progress file to restore all form fields",
                 label_visibility="collapsed",
             )
-            if uploaded_json is not None:
+            # Only process the file if we haven't already loaded it this session.
+            # Without this guard, the file uploader keeps its file in memory across
+            # reruns even after its session state key is deleted. This causes
+            # _load_tc_state to fire on EVERY rerun (including when Generate is
+            # clicked), and the st.rerun() inside the load handler kills the
+            # Generate button's click state before it can execute.
+            if uploaded_json is not None and not st.session_state.get("_tc_load_done"):
                 ok, msg = _load_tc_state(uploaded_json)
                 if ok:
                     st.success(f"✓ {msg}")
-                    # Delete the file uploader key so it resets on next render
+                    st.session_state["_tc_load_done"] = True
                     if "tc_load_uploader" in st.session_state:
                         del st.session_state["tc_load_uploader"]
                     st.rerun()
                 else:
                     st.error(f"Load failed: {msg}")
+            elif uploaded_json is None:
+                # File was cleared by user — reset the flag so a new file can be loaded
+                st.session_state.pop("_tc_load_done", None)
 
     st.divider()
 
@@ -1584,24 +1593,14 @@ def render_traffic_calming_wizard():
                 street_safe = (street_raw.replace(" ", "_").replace("/", "-")
                                          .replace("(", "").replace(")", "")[:35])
                 filename = f"TC_Review_{street_safe}_{datetime.now(_CT).strftime('%Y%m%d')}.docx"
+                # Store buffer bytes (not BytesIO) and filename in session state
                 st.session_state["_tc_doc_bytes"]    = buf.read()
                 st.session_state["_tc_doc_filename"] = filename
-                st.session_state.pop("_tc_doc_error", None)  # clear any previous error
             except Exception as e:
                 import traceback
                 st.session_state.pop("_tc_doc_bytes", None)
-                # Store error in session state so it persists across the rerun
-                # (errors shown inside an if st.button block vanish on the next render)
-                st.session_state["_tc_doc_error"] = (
-                    f"Error generating document: {e}\n\n{traceback.format_exc()}"
-                )
-
-        # Show persistent error if generation failed (survives the rerun after button click)
-        if st.session_state.get("_tc_doc_error"):
-            st.error(st.session_state["_tc_doc_error"])
-            if st.button("Dismiss error", key="btn_tc_dismiss_error"):
-                st.session_state.pop("_tc_doc_error", None)
-                st.rerun()
+                st.error(f"Error generating document: {e}")
+                st.code(traceback.format_exc())
 
         # Show download button whenever a generated doc is ready
         if st.session_state.get("_tc_doc_bytes"):
