@@ -15,24 +15,9 @@ Called by: pages/2_Wizard_Mode.py → render_traffic_calming_wizard()
 
 from io import BytesIO
 from datetime import datetime
-import sys
-from pathlib import Path
-
-# Ensure utils/ is on the path whether called from pages/ or directly
-_here = Path(__file__).parent
-if str(_here) not in sys.path:
-    sys.path.insert(0, str(_here))
-
-# Import SCORING_CRITERIA at module level so it's always available
-# (lazy import inside the function can fail on Streamlit Cloud if sys.path
-# isn't set up correctly at call time)
-try:
-    from traffic_calming_data import SCORING_CRITERIA as _SCORING_CRITERIA
-except ImportError:
-    _SCORING_CRITERIA = []
 
 
-def build_traffic_calming_report(data: dict) -> BytesIO:
+def build_traffic_calming_report(data: dict, scoring_criteria: list = None) -> BytesIO:
     """
     Build a .docx report from traffic calming form data.
 
@@ -356,7 +341,7 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
 
     if is_collector:
         h2("Tier 2 Prioritization Score (Part V–b–3)")
-        SCORING_CRITERIA = _SCORING_CRITERIA
+        SCORING_CRITERIA = scoring_criteria or []
         for crit in SCORING_CRITERIA:
             score_val = data.get(f"tc_score_{crit['id']}", 0) or 0
             kv(f"{crit['label']} (max {crit['max']})", f"{score_val} pts — {crit['basis']}", crit["cite"])
