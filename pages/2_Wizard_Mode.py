@@ -864,31 +864,28 @@ def render_traffic_calming_wizard():
         Each standard attachment type gets a checkbox (key: tc_att_{letter}_{index}).
         An 'Other' text field captures any non-standard attachments.
         All keys are stored in session state and serialized with Save/Load.
+
+        Note: uses st.container() instead of st.expander() because Streamlit
+        does not allow expanders nested inside other expanders.
         """
         if not TC_AVAILABLE:
             return
-        # Find the matching appendix section definition
         section = next(
             (s for s in APPENDIX_SECTIONS if s["letter"] == appendix_letter), None
         )
         if not section:
             return
 
-        with st.expander(
-            f"📎 Appendix {appendix_letter} Attachments — {section['title']}",
-            expanded=False
-        ):
-            st.caption(
-                "Check each attachment that is included in this application packet. "
-                "These appear on the appendix cover page in the generated document."
-            )
-            # Standard attachment checkboxes
+        st.markdown(
+            f"**📎 Appendix {appendix_letter} — {section['title']}** "
+            f"*(check attachments included in this packet)*"
+        )
+        with st.container():
+            cols = st.columns(2)
             for i, att_name in enumerate(section["attachments"]):
                 key = f"tc_att_{appendix_letter}_{i}"
                 st.session_state.setdefault(key, False)
-                st.checkbox(att_name, key=key)
-
-            # "Other" free-text field for non-standard items
+                cols[i % 2].checkbox(att_name, key=key)
             other_key = f"tc_att_{appendix_letter}_other"
             st.session_state.setdefault(other_key, "")
             st.text_input(
@@ -896,6 +893,7 @@ def render_traffic_calming_wizard():
                 key=other_key,
                 placeholder="Any additional attachments not listed above",
             )
+        st.divider()
 
     def _tc_filename():
         """
@@ -1021,32 +1019,28 @@ def render_traffic_calming_wizard():
                 )
 
         with load_col:
+            # Counter-based key: incrementing after a successful load creates a
+            # brand-new uploader widget with no file cached, preventing the load
+            # from re-firing on every rerun and reverting user edits.
+            _uploader_key = f"tc_load_uploader_{st.session_state.get('_tc_uploader_gen', 0)}"
             uploaded_json = st.file_uploader(
                 "Load saved progress (.json)",
                 type=["json"],
-                key="tc_load_uploader",
+                key=_uploader_key,
                 help="Upload a previously saved progress file to restore all form fields",
                 label_visibility="collapsed",
             )
-            # Only process the file if we haven't already loaded it this session.
-            # Without this guard, the file uploader keeps its file in memory across
-            # reruns even after its session state key is deleted. This causes
-            # _load_tc_state to fire on EVERY rerun (including when Generate is
-            # clicked), and the st.rerun() inside the load handler kills the
-            # Generate button's click state before it can execute.
-            if uploaded_json is not None and not st.session_state.get("_tc_load_done"):
+            if uploaded_json is not None:
                 ok, msg = _load_tc_state(uploaded_json)
                 if ok:
                     st.success(f"✓ {msg}")
-                    st.session_state["_tc_load_done"] = True
-                    if "tc_load_uploader" in st.session_state:
-                        del st.session_state["tc_load_uploader"]
+                    # Increment counter — next render uses a fresh uploader widget
+                    st.session_state["_tc_uploader_gen"] = (
+                        st.session_state.get("_tc_uploader_gen", 0) + 1
+                    )
                     st.rerun()
                 else:
                     st.error(f"Load failed: {msg}")
-            elif uploaded_json is None:
-                # File was cleared by user — reset the flag so a new file can be loaded
-                st.session_state.pop("_tc_load_done", None)
 
     st.divider()
 
