@@ -1384,9 +1384,15 @@ def render_traffic_calming_wizard():
         st.markdown("**Tier 2 Strategies Proposed [Part V-b Tier 2]**")
         t2_selected = []
         for strat, cite in TIER2_STRATEGIES:
-            safe_key = ("tc_t2_"
-                        + strat[:25].replace(" ", "_").replace("/", "_")
-                                    .replace(",", "").replace("-", "").lower())
+            # Generate a safe ASCII-only widget key from the strategy name.
+            # Must strip em dashes, en dashes, and any other non-ASCII characters
+            # because non-ASCII characters in Streamlit widget keys corrupt the
+            # WebSocket serialization and silently break other buttons on the page.
+            import re as _re
+            _slug = strat[:25].lower()
+            _slug = _slug.encode("ascii", "ignore").decode("ascii")  # strip non-ASCII
+            _slug = _re.sub(r"[^a-z0-9]+", "_", _slug).strip("_")
+            safe_key = f"tc_t2_{_slug}"
             if safe_key not in st.session_state:
                 st.session_state[safe_key] = False
             st.checkbox(f"{strat}  [{cite}]", key=safe_key)
@@ -1586,14 +1592,20 @@ def render_traffic_calming_wizard():
         # because the key persists in session state between renders.
         if st.button("Generate Word Document - Checklist + Action Items",
                      type="primary", use_container_width=True, key="btn_tc_export"):
-            import traceback as _tb, datetime as _dt
+            import traceback as _tb, datetime as _dt, re as _re2
             try:
-                # Build data dict inside the try block so any error is caught.
-                # Filter to only safe serializable types — skip UploadedFile
-                # objects and other widget-internal objects that can crash.
+                # Build data dict — everything inside try so errors are caught.
+                # Filter to safe types only; skip UploadedFile and widget objects.
+                # Also sanitize any keys with non-ASCII characters (em dashes etc.)
+                # that would corrupt Streamlit's WebSocket serialization.
                 data = {}
                 for k, v in st.session_state.items():
                     if not k.startswith("tc_"):
+                        continue
+                    # Skip keys containing non-ASCII (they signal corrupt widget state)
+                    try:
+                        k.encode("ascii")
+                    except UnicodeEncodeError:
                         continue
                     if isinstance(v, (_dt.date, _dt.datetime,
                                       str, bool, int, float,
@@ -1605,9 +1617,7 @@ def render_traffic_calming_wizard():
                     scoring_criteria=SCORING_CRITERIA if TC_AVAILABLE else [],
                 )
                 street_raw  = st.session_state.get("tc_street_name") or "TC_Review"
-                street_safe = (street_raw.replace(" ", "_")
-                                         .replace("/", "-")
-                                         .replace("(", "").replace(")", "")[:35])
+                street_safe = (_re2.sub(r"[^a-zA-Z0-9_\-]", "_", street_raw)[:35])
                 filename = (f"TC_Review_{street_safe}_"
                             f"{datetime.now(_CT).strftime('%Y%m%d')}.docx")
                 st.session_state["_tc_doc_bytes"]    = buf.read()
@@ -1615,11 +1625,9 @@ def render_traffic_calming_wizard():
                 st.session_state.pop("_tc_doc_error", None)
             except Exception:
                 st.session_state.pop("_tc_doc_bytes", None)
-                # Store full traceback in session state so it persists across
-                # the automatic rerun that follows every button click
                 st.session_state["_tc_doc_error"] = _tb.format_exc()
 
-        # Persistent error display — visible after the rerun
+        # Persistent error — survives the rerun after button click
         if st.session_state.get("_tc_doc_error"):
             st.error("Report generation failed — details below:")
             st.code(st.session_state["_tc_doc_error"])
@@ -1643,6 +1651,10 @@ def render_traffic_calming_wizard():
                              if k.startswith("tc_") or k.startswith("_tc_")]
             for k in keys_to_clear:
                 del st.session_state[k]
+            # Also remove the download and save widget keys so the widget tree
+            # stays consistent — otherwise Streamlit shows stale download buttons
+            for k in ["btn_tc_download", "btn_tc_save_dl"]:
+                st.session_state.pop(k, None)
             st.rerun()
 
 
@@ -1668,9 +1680,15 @@ def main():
         for _k in list(st.session_state.keys()):
             if _k.startswith("tc_") and _k not in _SKIP:
                 del st.session_state[_k]
-        # Write loaded values directly — safe here because no widgets exist yet
+        # Write loaded values directly — safe here because no widgets exist yet.
+        # Skip keys containing non-ASCII characters (e.g. em dashes from old JSON
+        # files) — these corrupt Streamlit's WebSocket serialization.
         for _k, _v in _payload.items():
             if not _k.startswith("tc_") or _k in _SKIP:
+                continue
+            try:
+                _k.encode("ascii")  # skip non-ASCII keys
+            except UnicodeEncodeError:
                 continue
             if isinstance(_v, dict) and "__date__" in _v:
                 try:
