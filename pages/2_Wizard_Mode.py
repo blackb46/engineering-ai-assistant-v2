@@ -42,8 +42,12 @@ try:
         APPLICATION_TYPES,
         TIER2_STRATEGIES,
         SCORING_CRITERIA,
+        APPENDIX_SECTIONS,
     )
-    from traffic_calming_report import build_traffic_calming_report
+    from traffic_calming_report import (
+        build_traffic_calming_report,
+        build_appendix_document,
+    )
     TC_AVAILABLE = True
 except ImportError:
     TC_AVAILABLE = False
@@ -853,9 +857,45 @@ def render_traffic_calming_wizard():
         st.session_state[key + "_str"] = date_str
         return val
 
-    # =========================================================================
-    # SAVE / LOAD PROGRESS
-    # =========================================================================
+    def tc_attachments(appendix_letter):
+        """
+        Render the attachment checklist for one appendix section.
+        Uses APPENDIX_SECTIONS from traffic_calming_data.py as the source of truth.
+        Each standard attachment type gets a checkbox (key: tc_att_{letter}_{index}).
+        An 'Other' text field captures any non-standard attachments.
+        All keys are stored in session state and serialized with Save/Load.
+        """
+        if not TC_AVAILABLE:
+            return
+        # Find the matching appendix section definition
+        section = next(
+            (s for s in APPENDIX_SECTIONS if s["letter"] == appendix_letter), None
+        )
+        if not section:
+            return
+
+        with st.expander(
+            f"📎 Appendix {appendix_letter} Attachments — {section['title']}",
+            expanded=False
+        ):
+            st.caption(
+                "Check each attachment that is included in this application packet. "
+                "These appear on the appendix cover page in the generated document."
+            )
+            # Standard attachment checkboxes
+            for i, att_name in enumerate(section["attachments"]):
+                key = f"tc_att_{appendix_letter}_{i}"
+                st.session_state.setdefault(key, False)
+                st.checkbox(att_name, key=key)
+
+            # "Other" free-text field for non-standard items
+            other_key = f"tc_att_{appendix_letter}_other"
+            st.session_state.setdefault(other_key, "")
+            st.text_input(
+                "Other (describe):",
+                key=other_key,
+                placeholder="Any additional attachments not listed above",
+            )
 
     def _tc_filename():
         """
@@ -889,6 +929,7 @@ def render_traffic_calming_wizard():
     # Includes: the file uploader, all selectbox shadow keys (_sel suffix),
     # and the street name placeholder key.
     _WIDGET_ONLY_KEYS = {
+        "tc_load_uploader",
         "tc_street_class_sel",
         "tc_app_type_sel",
         "tc_hoa_status_sel",
@@ -980,32 +1021,32 @@ def render_traffic_calming_wizard():
                 )
 
         with load_col:
-            # Use a counter-based widget key so that after a successful load,
-            # incrementing the counter creates a BRAND NEW uploader widget with
-            # no file in it. This is the only reliable way to reset a Streamlit
-            # file uploader — deleting the session state key is not enough because
-            # Streamlit's internal widget cache retains the file across reruns,
-            # causing the load to re-fire on every edit and revert user changes.
-            _uploader_key = f"tc_load_uploader_{st.session_state.get('_tc_uploader_gen', 0)}"
             uploaded_json = st.file_uploader(
                 "Load saved progress (.json)",
                 type=["json"],
-                key=_uploader_key,
+                key="tc_load_uploader",
                 help="Upload a previously saved progress file to restore all form fields",
                 label_visibility="collapsed",
             )
-            if uploaded_json is not None:
+            # Only process the file if we haven't already loaded it this session.
+            # Without this guard, the file uploader keeps its file in memory across
+            # reruns even after its session state key is deleted. This causes
+            # _load_tc_state to fire on EVERY rerun (including when Generate is
+            # clicked), and the st.rerun() inside the load handler kills the
+            # Generate button's click state before it can execute.
+            if uploaded_json is not None and not st.session_state.get("_tc_load_done"):
                 ok, msg = _load_tc_state(uploaded_json)
                 if ok:
                     st.success(f"✓ {msg}")
-                    # Increment the counter — next render creates a fresh uploader
-                    # widget with no file, so the load cannot re-fire on edits
-                    st.session_state["_tc_uploader_gen"] = (
-                        st.session_state.get("_tc_uploader_gen", 0) + 1
-                    )
+                    st.session_state["_tc_load_done"] = True
+                    if "tc_load_uploader" in st.session_state:
+                        del st.session_state["tc_load_uploader"]
                     st.rerun()
                 else:
                     st.error(f"Load failed: {msg}")
+            elif uploaded_json is None:
+                # File was cleared by user — reset the flag so a new file can be loaded
+                st.session_state.pop("_tc_load_done", None)
 
     st.divider()
 
@@ -1171,6 +1212,7 @@ def render_traffic_calming_wizard():
         st.checkbox("One signature and printed name per residence confirmed  [Part V]", key="tc_c_pet_format")
         st.text_area("Description of Perceived Problem / Safety Concern",
                      key="tc_problem_desc", height=80)
+        tc_attachments("A")
 
     # =========================================================================
     # SECTION II: ELIGIBILITY
@@ -1244,6 +1286,7 @@ def render_traffic_calming_wizard():
         st.checkbox("School route status confirmed  [Part V-b-3]", key="tc_c_data_school")
         st.checkbox("Continuous sidewalk presence/absence confirmed  [Part V-b-3]", key="tc_c_data_sidewalk")
         st.text_area("Data Collection Notes / Summary", key="tc_data_notes", height=80)
+        tc_attachments("B")
 
     # =========================================================================
     # SECTION IV: STREET-TYPE SPECIFIC
@@ -1328,6 +1371,7 @@ def render_traffic_calming_wizard():
                         key="tc_c_hump_markings")
             st.checkbox("All hump locations reviewed by City Engineer - drainage adequately accommodated  [Part VII]",
                         key="tc_c_hump_drainage")
+        tc_attachments("C")
 
     # =========================================================================
     # SECTION V: TIER 1
@@ -1372,6 +1416,7 @@ def render_traffic_calming_wizard():
             st.warning("Cannot mark both effective and ineffective - please uncheck one.")
         st.text_area("Tier 1 Notes (strategies applied, effectiveness findings)",
                      key="tc_t1_notes", height=80)
+        # Tier 1 study docs go in Appendix C alongside the engineering study
 
     # =========================================================================
     # SECTION VI: TIER 2 / SECOND PETITION
@@ -1486,6 +1531,7 @@ def render_traffic_calming_wizard():
                         key="tc_c_costshare_agree")
             st.checkbox("HOA funding letter on file confirming HOA will cover cost-share  [Part VII]",
                         key="tc_c_hoa_letter")
+        tc_attachments("D")
 
     # =========================================================================
     # SECTION VII: COST & PRIORITIZATION
@@ -1540,6 +1586,7 @@ def render_traffic_calming_wizard():
                     "(local streets - must be within 6 months of Board approval)  [Part VII]",
                     key="tc_c_cost_payment")
         st.text_area("Cost / Funding Notes", key="tc_cost_notes", height=100)
+        tc_attachments("E")
 
     # =========================================================================
     # SECTION VIII: BOARD ACTION
@@ -1572,51 +1619,124 @@ def render_traffic_calming_wizard():
                     key="tc_c_leftover_funds")
         st.text_area("Staff Recommendation Summary", key="tc_staff_rec_notes", height=80)
         st.text_area("Final / Closeout Notes", key="tc_final_notes", height=100)
+        tc_attachments("F")
+        tc_attachments("G")
 
     # =========================================================================
     # EXPORT / CLEAR
     # =========================================================================
     st.divider()
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([3, 3, 1])
+
     with col1:
-        # Generate the document and store it in session state so the download
-        # button can render unconditionally. Nesting st.download_button inside
-        # if st.button() causes a DuplicateWidgetID error on the second click
-        # because the key persists in session state between renders.
-        if st.button("Generate Word Document - Checklist + Action Items",
+        # ── Main checklist Word document ─────────────────────────────────
+        if st.button("📄 Generate Word Document",
                      type="primary", use_container_width=True, key="btn_tc_export"):
-            data = {k: v for k, v in st.session_state.items() if k.startswith("tc_")}
+            import traceback as _tb, datetime as _dt, re as _re2
             try:
-                buf = build_traffic_calming_report(data)
+                data = {}
+                for k, v in st.session_state.items():
+                    if not k.startswith("tc_"):
+                        continue
+                    try:
+                        k.encode("ascii")
+                    except UnicodeEncodeError:
+                        continue
+                    if isinstance(v, (_dt.date, _dt.datetime,
+                                      str, bool, int, float,
+                                      list, dict, type(None))):
+                        data[k] = v
+                buf = build_traffic_calming_report(
+                    data,
+                    scoring_criteria=SCORING_CRITERIA if TC_AVAILABLE else [],
+                )
                 street_raw  = st.session_state.get("tc_street_name") or "TC_Review"
-                street_safe = (street_raw.replace(" ", "_").replace("/", "-")
-                                         .replace("(", "").replace(")", "")[:35])
-                filename = f"TC_Review_{street_safe}_{datetime.now(_CT).strftime('%Y%m%d')}.docx"
-                # Store buffer bytes (not BytesIO) and filename in session state
+                street_safe = _re2.sub(r"[^a-zA-Z0-9_\-]", "_", street_raw)[:35]
+                filename = (f"TC_Review_{street_safe}_"
+                            f"{datetime.now(_CT).strftime('%Y%m%d')}.docx")
                 st.session_state["_tc_doc_bytes"]    = buf.read()
                 st.session_state["_tc_doc_filename"] = filename
-            except Exception as e:
-                import traceback
+                st.session_state.pop("_tc_doc_error", None)
+            except Exception:
                 st.session_state.pop("_tc_doc_bytes", None)
-                st.error(f"Error generating document: {e}")
-                st.code(traceback.format_exc())
+                st.session_state["_tc_doc_error"] = _tb.format_exc()
 
-        # Show download button whenever a generated doc is ready
+        if st.session_state.get("_tc_doc_error"):
+            st.error("Report generation failed — details below:")
+            st.code(st.session_state["_tc_doc_error"])
+            if st.button("Dismiss error", key="btn_tc_err_dismiss"):
+                st.session_state.pop("_tc_doc_error", None)
+                st.rerun()
+
         if st.session_state.get("_tc_doc_bytes"):
             st.download_button(
-                label="⬇ Download Word Document",
+                label="⬇ Download Checklist + Action Items",
                 data=st.session_state["_tc_doc_bytes"],
                 file_name=st.session_state.get("_tc_doc_filename", "TC_Review.docx"),
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
                 key="btn_tc_download",
             )
+
     with col2:
+        # ── Appendix cover pages Word document ────────────────────────────
+        if st.button("📎 Generate Appendix Document",
+                     use_container_width=True, key="btn_tc_appendix"):
+            import traceback as _tb, datetime as _dt, re as _re3
+            try:
+                data = {}
+                for k, v in st.session_state.items():
+                    if not k.startswith("tc_"):
+                        continue
+                    try:
+                        k.encode("ascii")
+                    except UnicodeEncodeError:
+                        continue
+                    if isinstance(v, (_dt.date, _dt.datetime,
+                                      str, bool, int, float,
+                                      list, dict, type(None))):
+                        data[k] = v
+                buf = build_appendix_document(
+                    data,
+                    appendix_sections=APPENDIX_SECTIONS if TC_AVAILABLE else [],
+                )
+                street_raw  = st.session_state.get("tc_street_name") or "TC_Review"
+                street_safe = _re3.sub(r"[^a-zA-Z0-9_\-]", "_", street_raw)[:35]
+                filename = (f"TC_Appendix_{street_safe}_"
+                            f"{datetime.now(_CT).strftime('%Y%m%d')}.docx")
+                st.session_state["_tc_app_bytes"]    = buf.read()
+                st.session_state["_tc_app_filename"] = filename
+                st.session_state.pop("_tc_app_error", None)
+            except Exception:
+                st.session_state.pop("_tc_app_bytes", None)
+                st.session_state["_tc_app_error"] = _tb.format_exc()
+
+        if st.session_state.get("_tc_app_error"):
+            st.error("Appendix generation failed — details below:")
+            st.code(st.session_state["_tc_app_error"])
+            if st.button("Dismiss error", key="btn_tc_app_err_dismiss"):
+                st.session_state.pop("_tc_app_error", None)
+                st.rerun()
+
+        if st.session_state.get("_tc_app_bytes"):
+            st.download_button(
+                label="⬇ Download Appendix Cover Pages",
+                data=st.session_state["_tc_app_bytes"],
+                file_name=st.session_state.get("_tc_app_filename", "TC_Appendix.docx"),
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                key="btn_tc_app_download",
+            )
+
+    with col3:
         if st.button("Clear TC Form", use_container_width=True, key="btn_tc_clear"):
             keys_to_clear = [k for k in list(st.session_state.keys())
                              if k.startswith("tc_") or k.startswith("_tc_")]
             for k in keys_to_clear:
                 del st.session_state[k]
+            for k in ["btn_tc_download", "btn_tc_save_dl",
+                      "btn_tc_app_download"]:
+                st.session_state.pop(k, None)
             st.rerun()
 
 
