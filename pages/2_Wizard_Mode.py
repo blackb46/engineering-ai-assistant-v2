@@ -726,7 +726,7 @@ def _tc_init():
     conflicts with a widget that has already written its value.
     """
     str_keys = [
-        "tc_case_num", "tc_app_date", "tc_street_class", "tc_street_name",
+        "tc_case_num", "tc_street_class", "tc_street_name",
         "tc_street_name_input", "tc_street_segment", "tc_seg_length",
         "tc_app_type", "tc_petitioner_name", "tc_petitioner_contact",
         "tc_hoa_status", "tc_eligible_res", "tc_sigs_received", "tc_init_pct",
@@ -734,14 +734,26 @@ def _tc_init():
         "tc_data_crashes", "tc_data_cutthru", "tc_speed_excess",
         "tc_speed_excess_raw", "tc_data_school_route", "tc_data_sidewalk_status",
         "tc_data_notes", "tc_local_adt", "tc_local_adt_proj", "tc_local_width",
-        "tc_local_grade", "tc_local_spd_limit", "tc_t1_date",
-        "tc_t1_review_date", "tc_t1_notes", "tc_pet2_total", "tc_pet2_yes",
-        "tc_pet2_pct", "tc_pet2_mail", "tc_pet2_deadline",
-        "tc_moratorium_start", "tc_moratorium_end", "tc_cost_direct",
+        "tc_local_grade", "tc_local_spd_limit",
+        "tc_t1_notes", "tc_pet2_total", "tc_pet2_yes",
+        "tc_pet2_pct",
+        "tc_cost_direct",
         "tc_cost_contingency", "tc_cost_total", "tc_cost_resident",
-        "tc_cost_city", "tc_cost_notes", "tc_public_meeting_date",
-        "tc_public_meeting_notes", "tc_board_date", "tc_board_res_num",
+        "tc_cost_city", "tc_cost_notes",
+        "tc_public_meeting_notes", "tc_board_res_num",
         "tc_staff_rec_notes", "tc_final_notes",
+    ]
+    # Date keys — stored as datetime.date or None.
+    # st.date_input(value=None) renders as a blank optional field (Streamlit 1.38+).
+    # The report builder reads formatted strings; the date widgets auto-format on render.
+    date_keys = [
+        "tc_app_date",
+        "tc_t1_date",
+        "tc_t1_review_date",
+        "tc_pet2_mail",
+        "tc_moratorium_start",
+        "tc_public_meeting_date",
+        "tc_board_date",
     ]
     bool_keys = [
         "tc_c_hoa_gov", "tc_c_hoa_req", "tc_c_init_pet", "tc_c_pet_format",
@@ -767,6 +779,8 @@ def _tc_init():
     ]
     for k in str_keys:
         st.session_state.setdefault(k, "")
+    for k in date_keys:
+        st.session_state.setdefault(k, None)
     for k in bool_keys:
         st.session_state.setdefault(k, False)
     st.session_state.setdefault("tc_t2_strategies", [])
@@ -797,6 +811,26 @@ def render_traffic_calming_wizard():
         except ValueError:
             return 0
 
+    def tc_date(label, key, help_text=None):
+        """
+        Render a date_input that stores a datetime.date or None.
+        value=None renders as a blank optional field (Streamlit 1.38+).
+        Also writes a formatted string to key + '_str' so the report builder
+        can read it without needing to handle date objects.
+        """
+        import datetime as dt
+        val = st.date_input(
+            label,
+            value=st.session_state.get(key, None),
+            key=key,
+            help=help_text,
+            format="MM/DD/YYYY",
+        )
+        # Write formatted string for the report builder
+        date_str = val.strftime("%m/%d/%Y") if isinstance(val, dt.date) else ""
+        st.session_state[key + "_str"] = date_str
+        return val
+
     # =========================================================================
     # SECTION I: ADMINISTRATIVE REVIEW
     # =========================================================================
@@ -806,7 +840,7 @@ def render_traffic_calming_wizard():
             st.text_input("Case / File Number", key="tc_case_num",
                           placeholder="e.g. TC-2026-001")
         with col2:
-            st.text_input("Application Date (MM/DD/YYYY)", key="tc_app_date")
+            tc_date("Application Date", key="tc_app_date")
 
         st.markdown("---")
         st.markdown("**Step 1 — Street Classification**")
@@ -1126,9 +1160,10 @@ def render_traffic_calming_wizard():
                     "Reevaluate 6 months after installation before final speed hump decision.  [Part VII]")
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input("Tier 1 Implementation Date", key="tc_t1_date")
+            tc_date("Tier 1 Implementation Date", key="tc_t1_date")
         with col2:
-            st.text_input("Six-Month Effectiveness Review Date", key="tc_t1_review_date")
+            tc_date("Six-Month Effectiveness Review Date", key="tc_t1_review_date",
+                    help_text="6 months after implementation — effectiveness re-evaluated at this date")
         st.checkbox("Study recommendation includes one or more Tier 1 strategies  [Part V-b-1]",
                     key="tc_c_t1_study")
         st.checkbox("Staff met with petitioner to outline study recommendations  [Part V-b-1]",
@@ -1180,10 +1215,26 @@ def render_traffic_calming_wizard():
         with col1:
             st.text_input("Total Households - Affected Area (within 600 ft)  [Part V-b-2 / VII]",
                           key="tc_pet2_total")
-            st.text_input("Petition Mail Date  [Part V-b-2 / VII]", key="tc_pet2_mail")
+            tc_date("Petition Mail Date  [Part V-b-2 / VII]", key="tc_pet2_mail")
         with col2:
             st.text_input("Yes Votes Received  [Part V-b-2 / VII]", key="tc_pet2_yes")
-            st.text_input("45-Day Response Deadline  [Part V-b-2 / VII]", key="tc_pet2_deadline")
+            # 45-day deadline auto-calculated from petition mail date + extension
+            # Extension checkbox placed here so it feeds the calculation directly
+            st.checkbox("30-day extension granted  [Part V-b-2 / VII]", key="tc_pet2_ext")
+            st.caption("Extension requires extenuating circumstances; request within 7 days of results notification.")
+            _mail_val = st.session_state.get("tc_pet2_mail")
+            _ext_val  = st.session_state.get("tc_pet2_ext", False)
+            if _mail_val:
+                import datetime as _dt
+                _days = 45 + (30 if _ext_val else 0)
+                _deadline = _mail_val + _dt.timedelta(days=_days)
+                _deadline_str = _deadline.strftime("%m/%d/%Y")
+                st.session_state["tc_pet2_deadline"] = _deadline_str
+                _label = f"45-Day Deadline{' + 30-Day Extension' if _ext_val else ''}"
+                st.markdown(f"**{_label}:** {_deadline_str}  *[Part V-b-2 / VII]*")
+            else:
+                st.session_state["tc_pet2_deadline"] = ""
+                st.markdown("**45-Day Deadline:** *(enter petition mail date)*")
         with col3:
             try:
                 pct2 = (float(st.session_state.get("tc_pet2_yes") or 0)
@@ -1195,9 +1246,6 @@ def render_traffic_calming_wizard():
                 st.caption("Threshold met" if pct2 >= 66.7 else "Need 66.7% (2/3) to proceed")
             except Exception:
                 st.markdown("**Support:** -")
-            st.checkbox("30-day extension granted  [Part V-b-2 / VII]", key="tc_pet2_ext")
-            st.caption("Extension requires extenuating circumstances; request within 7 days of results notification.")
-
         st.checkbox("Petitions mailed by City on petitioner behalf (City mails twice)  [Part V-b-2 / VII]",
                     key="tc_c_pet2_mailed")
         st.checkbox("Vote eligibility confirmed NOT contingent on HOA membership  [Part V-b-2 / VII]",
@@ -1206,11 +1254,37 @@ def render_traffic_calming_wizard():
                     key="tc_c_pet2_nonresp")
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input("Last Day of Voting Window (start of moratorium if petition fails)",
-                          key="tc_moratorium_start")
+            tc_date("Last Day of Voting Window  [Part V-b-2 / VII]",
+                    key="tc_moratorium_start",
+                    help_text="The moratorium clock starts on this date if the petition fails")
         with col2:
-            st.text_input("Moratorium End Date (24 months; or 12 months per Res. 2026-12 Section 3)",
-                          key="tc_moratorium_end")
+            # Moratorium end auto-calculated from last day of voting window.
+            # Per Resolution 2026-12 §3: if the vote occurred within 12 months before
+            # adoption (02/09/2026), the moratorium is 12 months instead of 24.
+            _vote_val = st.session_state.get("tc_moratorium_start")
+            if _vote_val:
+                import datetime as _dt
+                _resolution_date    = _dt.date(2026, 2, 9)
+                _twelve_months_prior = _dt.date(2025, 2, 9)
+                _short_moratorium = (_twelve_months_prior <= _vote_val <= _resolution_date)
+                _months = 12 if _short_moratorium else 24
+                # Add months without overflow (handle month-end edge cases)
+                _m = _vote_val.month + _months
+                _y = _vote_val.year + (_m - 1) // 12
+                _m = (_m - 1) % 12 + 1
+                import calendar as _cal
+                _d = min(_vote_val.day, _cal.monthrange(_y, _m)[1])
+                _end = _dt.date(_y, _m, _d)
+                _end_str = _end.strftime("%m/%d/%Y")
+                st.session_state["tc_moratorium_end"] = _end_str
+                if _short_moratorium:
+                    st.markdown(f"**Moratorium End:** {_end_str} *(12 months — Res. 2026-12 §3)*")
+                    st.caption("Vote occurred within 12 months before adoption — 12-month moratorium applies.")
+                else:
+                    st.markdown(f"**Moratorium End:** {_end_str} *(24 months)*")
+            else:
+                st.session_state["tc_moratorium_end"] = ""
+                st.markdown("**Moratorium End:** *(enter last day of voting window)*")
         st.caption("Per Resolution 2026-12 Section 3: petitions with votes within 12 months before "
                    "adoption (02/09/2026) use a 12-month moratorium only.")
 
@@ -1273,7 +1347,7 @@ def render_traffic_calming_wizard():
         st.checkbox("Resident 60% payment received prior to installation "
                     "(local streets - must be within 6 months of Board approval)  [Part VII]",
                     key="tc_c_cost_payment")
-        st.text_area("Cost / Funding Notes", key="tc_cost_notes", height=100)
+        st.text_area("Cost / Funding Notes", key="tc_cost_notes", height=60)
 
     # =========================================================================
     # SECTION VIII: BOARD ACTION
@@ -1281,8 +1355,8 @@ def render_traffic_calming_wizard():
     with st.expander("VIII. Public Meeting & Board of Commissioners Action", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input("Public Meeting Date  [Part V-b-2]", key="tc_public_meeting_date")
-            st.text_input("Board Meeting Date  [Part VII]", key="tc_board_date")
+            tc_date("Public Meeting Date  [Part V-b-2]", key="tc_public_meeting_date")
+            tc_date("Board Meeting Date  [Part VII]", key="tc_board_date")
         with col2:
             st.text_input("Public Meeting Summary / Outcome", key="tc_public_meeting_notes")
             st.text_input("Board Resolution Number  [Part VII]", key="tc_board_res_num",
@@ -1305,7 +1379,7 @@ def render_traffic_calming_wizard():
         st.checkbox("Any leftover funds returned to petitioning group upon project completion  [Part VII]",
                     key="tc_c_leftover_funds")
         st.text_area("Staff Recommendation Summary", key="tc_staff_rec_notes", height=80)
-        st.text_area("Final / Closeout Notes", key="tc_final_notes", height=100)
+        st.text_area("Final / Closeout Notes", key="tc_final_notes", height=60)
 
     # =========================================================================
     # EXPORT / CLEAR
