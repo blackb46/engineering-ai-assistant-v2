@@ -841,6 +841,118 @@ def render_traffic_calming_wizard():
         return val
 
     # =========================================================================
+    # SAVE / LOAD PROGRESS
+    # =========================================================================
+
+    def _tc_filename():
+        """Build a safe filename from case number + street name."""
+        import re
+        case   = st.session_state.get("tc_case_num", "") or ""
+        street = st.session_state.get("tc_street_name", "") or ""
+        parts  = [p for p in [case, street] if p]
+        raw    = "_".join(parts) if parts else "TC_progress"
+        # Replace spaces and common punctuation with underscores, strip the rest
+        safe = re.sub(r"[\s/\\:*?\"<>|]+", "_", raw)
+        safe = re.sub(r"[^\w\-]", "", safe)
+        safe = re.sub(r"_+", "_", safe).strip("_")
+        return f"{safe}_progress.json"
+
+    def _save_tc_state() -> bytes:
+        """
+        Serialize all tc_ session state keys to JSON bytes.
+        datetime.date objects are stored as ISO strings with a __date__ marker
+        so they can be round-tripped correctly on load.
+        """
+        import json
+        import datetime as dt
+        payload = {}
+        for k, v in st.session_state.items():
+            if not k.startswith("tc_"):
+                continue
+            if isinstance(v, dt.date):
+                payload[k] = {"__date__": v.isoformat()}
+            elif isinstance(v, (str, bool, int, float, list, type(None))):
+                payload[k] = v
+            # skip anything else (e.g. widget-internal objects)
+        return json.dumps(payload, indent=2).encode("utf-8")
+
+    def _load_tc_state(uploaded_file):
+        """
+        Restore tc_ session state from an uploaded JSON file.
+        Converts __date__ markers back to datetime.date objects.
+        Returns (success: bool, message: str).
+        """
+        import json
+        import datetime as dt
+        try:
+            raw = uploaded_file.read()
+            payload = json.loads(raw)
+        except Exception as e:
+            return False, f"Could not read file: {e}"
+
+        if not isinstance(payload, dict):
+            return False, "Invalid file format — expected a JSON object."
+
+        # Clear existing tc_ keys first so stale values don't linger
+        for k in list(st.session_state.keys()):
+            if k.startswith("tc_"):
+                del st.session_state[k]
+
+        # Restore values with correct types
+        loaded = 0
+        for k, v in payload.items():
+            if not k.startswith("tc_"):
+                continue
+            if isinstance(v, dict) and "__date__" in v:
+                try:
+                    st.session_state[k] = dt.date.fromisoformat(v["__date__"])
+                    loaded += 1
+                except Exception:
+                    pass  # skip malformed dates
+            else:
+                st.session_state[k] = v
+                loaded += 1
+
+        return True, f"Loaded {loaded} fields successfully."
+
+    # ── Save / Load bar ───────────────────────────────────────────────────────
+    with st.container():
+        save_col, load_col = st.columns([1, 2])
+
+        with save_col:
+            if st.button("💾 Save Progress", use_container_width=True,
+                         key="btn_tc_save",
+                         help="Download current form state as a JSON file to resume later"):
+                _data = _save_tc_state()
+                _fname = _tc_filename()
+                st.download_button(
+                    label=f"⬇ Download  {_fname}",
+                    data=_data,
+                    file_name=_fname,
+                    mime="application/json",
+                    use_container_width=True,
+                    key="btn_tc_save_dl",
+                )
+
+        with load_col:
+            uploaded_json = st.file_uploader(
+                "Load saved progress (.json)",
+                type=["json"],
+                key="tc_load_uploader",
+                help="Upload a previously saved progress file to restore all form fields",
+                label_visibility="collapsed",
+            )
+            if uploaded_json is not None:
+                ok, msg = _load_tc_state(uploaded_json)
+                if ok:
+                    st.success(f"✓ {msg}")
+                    st.rerun()
+                else:
+                    st.error(f"Load failed: {msg}")
+
+    st.divider()
+
+    # =========================================================================
     # SECTION I: ADMINISTRATIVE REVIEW
     # =========================================================================
     with st.expander("I. Administrative Review", expanded=True):
