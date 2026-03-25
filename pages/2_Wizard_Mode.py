@@ -966,12 +966,15 @@ def render_traffic_calming_wizard():
             if st.button("💾 Save Progress", use_container_width=True,
                          key="btn_tc_save",
                          help="Download current form state as a JSON file to resume later"):
-                _data = _save_tc_state()
-                _fname = _tc_filename()
+                st.session_state["_tc_save_bytes"] = _save_tc_state()
+                st.session_state["_tc_save_fname"] = _tc_filename()
+
+            # Show download button whenever save data is ready (same pattern as Word doc)
+            if st.session_state.get("_tc_save_bytes"):
                 st.download_button(
-                    label=f"⬇ Download  {_fname}",
-                    data=_data,
-                    file_name=_fname,
+                    label=f"⬇ Download  {st.session_state.get('_tc_save_fname', 'TC_progress.json')}",
+                    data=st.session_state["_tc_save_bytes"],
+                    file_name=st.session_state.get("_tc_save_fname", "TC_progress.json"),
                     mime="application/json",
                     use_container_width=True,
                     key="btn_tc_save_dl",
@@ -1585,8 +1588,10 @@ def render_traffic_calming_wizard():
                 st.session_state["_tc_doc_bytes"]    = buf.read()
                 st.session_state["_tc_doc_filename"] = filename
             except Exception as e:
+                import traceback
                 st.session_state.pop("_tc_doc_bytes", None)
                 st.error(f"Error generating document: {e}")
+                st.code(traceback.format_exc())
 
         # Show download button whenever a generated doc is ready
         if st.session_state.get("_tc_doc_bytes"):
