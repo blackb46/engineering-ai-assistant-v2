@@ -1584,14 +1584,24 @@ def render_traffic_calming_wizard():
                 street_safe = (street_raw.replace(" ", "_").replace("/", "-")
                                          .replace("(", "").replace(")", "")[:35])
                 filename = f"TC_Review_{street_safe}_{datetime.now(_CT).strftime('%Y%m%d')}.docx"
-                # Store buffer bytes (not BytesIO) and filename in session state
                 st.session_state["_tc_doc_bytes"]    = buf.read()
                 st.session_state["_tc_doc_filename"] = filename
+                st.session_state.pop("_tc_doc_error", None)  # clear any previous error
             except Exception as e:
                 import traceback
                 st.session_state.pop("_tc_doc_bytes", None)
-                st.error(f"Error generating document: {e}")
-                st.code(traceback.format_exc())
+                # Store error in session state so it persists across the rerun
+                # (errors shown inside an if st.button block vanish on the next render)
+                st.session_state["_tc_doc_error"] = (
+                    f"Error generating document: {e}\n\n{traceback.format_exc()}"
+                )
+
+        # Show persistent error if generation failed (survives the rerun after button click)
+        if st.session_state.get("_tc_doc_error"):
+            st.error(st.session_state["_tc_doc_error"])
+            if st.button("Dismiss error", key="btn_tc_dismiss_error"):
+                st.session_state.pop("_tc_doc_error", None)
+                st.rerun()
 
         # Show download button whenever a generated doc is ready
         if st.session_state.get("_tc_doc_bytes"):
