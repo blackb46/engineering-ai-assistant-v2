@@ -898,13 +898,15 @@ def render_traffic_calming_wizard():
 
     def _load_tc_state(uploaded_file):
         """
-        Restore tc_ session state from an uploaded JSON file.
-        Converts __date__ markers back to datetime.date objects.
-        Widget-bound keys in the file are silently skipped.
+        Stage JSON file contents for pre-render processing.
+        Rather than writing to session state directly (which can conflict with
+        Streamlit's widget state cache), we store the raw payload in a staging
+        key (_tc_pending_load). main() applies it at the very top of the next
+        render, before any widgets exist, so all widgets see the loaded values
+        as their initial state.
         Returns (success: bool, message: str).
         """
         import json
-        import datetime as dt
         try:
             raw = uploaded_file.read()
             payload = json.loads(raw)
@@ -914,29 +916,20 @@ def render_traffic_calming_wizard():
         if not isinstance(payload, dict):
             return False, "Invalid file format — expected a JSON object."
 
-        # Clear existing tc_ keys (except widget-bound ones — Streamlit owns those)
-        for k in list(st.session_state.keys()):
-            if k.startswith("tc_") and k not in _WIDGET_ONLY_KEYS:
-                del st.session_state[k]
-
-        # Restore values with correct types, skipping widget-bound keys
-        loaded = 0
-        for k, v in payload.items():
-            if not k.startswith("tc_"):
-                continue
-            if k in _WIDGET_ONLY_KEYS:
-                continue  # never restore widget-bound keys
-            if isinstance(v, dict) and "__date__" in v:
-                try:
-                    st.session_state[k] = dt.date.fromisoformat(v["__date__"])
-                    loaded += 1
-                except Exception:
-                    pass  # skip malformed dates
-            else:
-                st.session_state[k] = v
-                loaded += 1
-
-        return True, f"Loaded {loaded} fields successfully."
+        # Count loadable fields for the success message
+        _SKIP = {
+            "tc_load_uploader", "tc_street_class_sel", "tc_app_type_sel",
+            "tc_hoa_status_sel", "tc_data_school_route_sel",
+            "tc_data_sidewalk_status_sel", "tc_street_name_art",
+            "tc_street_name_col", "tc_street_name_placeholder",
+        }
+        loadable = sum(
+            1 for k in payload
+            if k.startswith("tc_") and k not in _SKIP
+        )
+        # Stage the raw payload — main() will apply it before widgets render
+        st.session_state["_tc_pending_load"] = payload
+        return True, f"Loading {loadable} fields..."
 
     # ── Save / Load bar ───────────────────────────────────────────────────────
     with st.container():
@@ -969,6 +962,9 @@ def render_traffic_calming_wizard():
                 ok, msg = _load_tc_state(uploaded_json)
                 if ok:
                     st.success(f"✓ {msg}")
+                    # Delete the file uploader key so it resets on next render
+                    if "tc_load_uploader" in st.session_state:
+                        del st.session_state["tc_load_uploader"]
                     st.rerun()
                 else:
                     st.error(f"Load failed: {msg}")
@@ -1575,6 +1571,37 @@ def render_traffic_calming_wizard():
 def main():
     """Main function for Wizard Mode"""
     initialize_session_state()
+
+    # ── Process any pending TC load BEFORE any widgets render ────────────────
+    # If a JSON file was uploaded and parsed in the previous render, the load
+    # results are stored in a staging key. We apply them here, at the very top
+    # of the script, before any widget renders. This guarantees Streamlit sees
+    # the loaded values as the widget's initial state for this render pass.
+    if st.session_state.get("_tc_pending_load"):
+        import json, datetime as _ldt
+        _SKIP = {
+            "tc_load_uploader", "tc_street_class_sel", "tc_app_type_sel",
+            "tc_hoa_status_sel", "tc_data_school_route_sel",
+            "tc_data_sidewalk_status_sel", "tc_street_name_art",
+            "tc_street_name_col", "tc_street_name_placeholder",
+        }
+        _payload = st.session_state["_tc_pending_load"]
+        # Remove existing tc_ keys (not widget-bound) so stale values don't linger
+        for _k in list(st.session_state.keys()):
+            if _k.startswith("tc_") and _k not in _SKIP:
+                del st.session_state[_k]
+        # Write loaded values directly — safe here because no widgets exist yet
+        for _k, _v in _payload.items():
+            if not _k.startswith("tc_") or _k in _SKIP:
+                continue
+            if isinstance(_v, dict) and "__date__" in _v:
+                try:
+                    st.session_state[_k] = _ldt.date.fromisoformat(_v["__date__"])
+                except Exception:
+                    pass
+            else:
+                st.session_state[_k] = _v
+        del st.session_state["_tc_pending_load"]
 
     page_header(
         title="Engineering Checklist Mode",
