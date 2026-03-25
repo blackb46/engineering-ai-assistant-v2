@@ -1584,45 +1584,42 @@ def render_traffic_calming_wizard():
                      type="primary", use_container_width=True, key="btn_tc_export"):
             import traceback as _tb
             try:
-                # Collect only simple serializable tc_ values — skip file objects
-                # and widget-internal objects that could cause iteration errors
-                _safe_types = (str, bool, int, float, list, dict, type(None))
                 import datetime as _dt
+                # Build data dict — skip non-serializable objects like UploadedFile
                 data = {}
                 for k, v in st.session_state.items():
                     if not k.startswith("tc_"):
                         continue
-                    if isinstance(v, (_dt.date, _dt.datetime)):
+                    if isinstance(v, (_dt.date, _dt.datetime, str, bool, int,
+                                      float, list, dict, type(None))):
                         data[k] = v
-                    elif isinstance(v, _safe_types):
-                        data[k] = v
-                    # skip anything else (UploadedFile, widget objects, etc.)
 
                 buf = build_traffic_calming_report(
                     data,
                     scoring_criteria=SCORING_CRITERIA if TC_AVAILABLE else [],
                 )
                 street_raw  = st.session_state.get("tc_street_name") or "TC_Review"
-                street_safe = (street_raw.replace(" ", "_").replace("/", "-")
+                street_safe = (street_raw.replace(" ", "_")
+                                         .replace("/", "-")
                                          .replace("(", "").replace(")", "")[:35])
-                filename = f"TC_Review_{street_safe}_{datetime.now(_CT).strftime('%Y%m%d')}.docx"
+                filename = (f"TC_Review_{street_safe}_"
+                            f"{datetime.now(_CT).strftime('%Y%m%d')}.docx")
                 st.session_state["_tc_doc_bytes"]    = buf.read()
                 st.session_state["_tc_doc_filename"] = filename
                 st.session_state.pop("_tc_doc_error", None)
             except Exception:
                 st.session_state.pop("_tc_doc_bytes", None)
-                # Store full traceback persistently so it survives the rerun
                 st.session_state["_tc_doc_error"] = _tb.format_exc()
 
-        # Persistent error display — survives the rerun after button click
+        # Persistent error — stored in session state so it survives the rerun
         if st.session_state.get("_tc_doc_error"):
-            st.error("Error generating document — see details below:")
+            st.error("Report generation failed:")
             st.code(st.session_state["_tc_doc_error"])
             if st.button("Dismiss", key="btn_tc_err_dismiss"):
                 st.session_state.pop("_tc_doc_error", None)
                 st.rerun()
 
-        # Download button appears once doc is ready
+        # Download button — only shown when a doc is ready
         if st.session_state.get("_tc_doc_bytes"):
             st.download_button(
                 label="⬇ Download Word Document",
