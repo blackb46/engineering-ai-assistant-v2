@@ -1580,29 +1580,49 @@ def render_traffic_calming_wizard():
     st.divider()
     col1, col2 = st.columns([3, 1])
     with col1:
-        # Generate the document and store it in session state so the download
-        # button can render unconditionally. Nesting st.download_button inside
-        # if st.button() causes a DuplicateWidgetID error on the second click
-        # because the key persists in session state between renders.
         if st.button("Generate Word Document - Checklist + Action Items",
                      type="primary", use_container_width=True, key="btn_tc_export"):
-            data = {k: v for k, v in st.session_state.items() if k.startswith("tc_")}
+            import traceback as _tb
             try:
-                buf = build_traffic_calming_report(data)
+                # Collect only simple serializable tc_ values — skip file objects
+                # and widget-internal objects that could cause iteration errors
+                _safe_types = (str, bool, int, float, list, dict, type(None))
+                import datetime as _dt
+                data = {}
+                for k, v in st.session_state.items():
+                    if not k.startswith("tc_"):
+                        continue
+                    if isinstance(v, (_dt.date, _dt.datetime)):
+                        data[k] = v
+                    elif isinstance(v, _safe_types):
+                        data[k] = v
+                    # skip anything else (UploadedFile, widget objects, etc.)
+
+                buf = build_traffic_calming_report(
+                    data,
+                    scoring_criteria=SCORING_CRITERIA if TC_AVAILABLE else [],
+                )
                 street_raw  = st.session_state.get("tc_street_name") or "TC_Review"
                 street_safe = (street_raw.replace(" ", "_").replace("/", "-")
                                          .replace("(", "").replace(")", "")[:35])
                 filename = f"TC_Review_{street_safe}_{datetime.now(_CT).strftime('%Y%m%d')}.docx"
-                # Store buffer bytes (not BytesIO) and filename in session state
                 st.session_state["_tc_doc_bytes"]    = buf.read()
                 st.session_state["_tc_doc_filename"] = filename
-            except Exception as e:
-                import traceback
+                st.session_state.pop("_tc_doc_error", None)
+            except Exception:
                 st.session_state.pop("_tc_doc_bytes", None)
-                st.error(f"Error generating document: {e}")
-                st.code(traceback.format_exc())
+                # Store full traceback persistently so it survives the rerun
+                st.session_state["_tc_doc_error"] = _tb.format_exc()
 
-        # Show download button whenever a generated doc is ready
+        # Persistent error display — survives the rerun after button click
+        if st.session_state.get("_tc_doc_error"):
+            st.error("Error generating document — see details below:")
+            st.code(st.session_state["_tc_doc_error"])
+            if st.button("Dismiss", key="btn_tc_err_dismiss"):
+                st.session_state.pop("_tc_doc_error", None)
+                st.rerun()
+
+        # Download button appears once doc is ready
         if st.session_state.get("_tc_doc_bytes"):
             st.download_button(
                 label="⬇ Download Word Document",
