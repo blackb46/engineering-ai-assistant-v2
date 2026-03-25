@@ -135,7 +135,6 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
     is_collector = street_class == "Collector Street"
     is_local     = street_class == "Local Residential Street"
     is_arterial  = street_class == "Arterial Street"
-    is_arterial  = "Arterial" in street_class
 
     # ── TITLE BLOCK ────────────────────────────────────────────────────────
     title = doc.add_paragraph()
@@ -152,6 +151,18 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
     )
     sr.font.size  = Pt(9)
     sr.font.color.rgb = ORANGE
+
+    # Third line: case number + street name (only if at least one is populated)
+    case_num   = get("tc_case_num")
+    street_nm  = get("tc_street_name")
+    if case_num or street_nm:
+        id_line = doc.add_paragraph()
+        id_line.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        parts = [p for p in [case_num, street_nm] if p]
+        id_run = id_line.add_run("  —  ".join(parts))
+        id_run.font.size  = Pt(11)
+        id_run.font.bold  = True
+        id_run.font.color.rgb = NAVY
 
     divider()
 
@@ -375,75 +386,91 @@ def build_traffic_calming_report(data: dict) -> BytesIO:
     # ── SECTION IX: ACTION ITEMS ──────────────────────────────────────────
     h1("IX. Outstanding Action Items")
 
-    # Master list: (session_key, display_label, policy_cite, section_label)
+    # Master list: (session_key, display_label, policy_cite, section_label, applies_to)
+    # applies_to: "all" | "local" | "collector"
+    # Items marked "local" only appear for Local Residential Street applications.
+    # Items marked "collector" only appear for Collector Street applications.
     ALL_ACTIONS = [
-        # Admin
-        ("tc_c_hoa_gov",          "Confirm HOA governance status",                               "Part V",       "I. Admin"),
-        ("tc_c_hoa_req",          "Confirm HOA written request submitted or bypass justified",    "Part V / VII", "I. Admin"),
-        ("tc_c_init_pet",         "Obtain initial >50% support petition",                        "Part V / VII", "I. Admin"),
-        ("tc_c_pet_format",       "Verify one signature/printed name per residence",              "Part V",       "I. Admin"),
-        # Classification
-        ("tc_c_not_private",      "Confirm public street (not gated/private)",                   "Part V / VII", "II. Classification"),
-        ("tc_c_not_emergency",    "Confirm not a designated primary emergency route",             "Part V",       "II. Classification"),
-        ("tc_c_collector_list",   "Verify collector street list status",                         "Part V",       "II. Classification"),
-        # Data
-        ("tc_c_data_speed",       "Complete speed study (≥24-hr weekday)",                       "Part V–a",     "III. Data"),
-        ("tc_c_data_vol",         "Complete traffic count / ADT",                                "Part V–a / VII","III. Data"),
-        ("tc_c_data_crash",       "Review crash history (12 months)",                            "Parts I–II",   "III. Data"),
-        ("tc_c_data_school",      "Confirm school route status",                                 "Part V–b–3",   "III. Data"),
-        ("tc_c_data_sidewalk",    "Confirm continuous sidewalk status",                          "Part V–b–3",   "III. Data"),
-        # Collector
-        ("tc_c_coll_speed_data",  "Collect ≥24-hr weekday speed data",                          "Part V–a",     "IV. Collector"),
-        ("tc_c_coll_2lanes",      "Confirm street has ≤2 traffic lanes",                         "Part V–a",     "IV. Collector"),
-        ("tc_c_coll_termini",     "Identify logical termini for calming treatment",              "Part V–a",     "IV. Collector"),
-        ("tc_c_coll_study_vol",   "Include volume analysis in engineering study",                "Part V–b–1",   "IV. Collector"),
-        ("tc_c_coll_study_speed", "Include speed analysis in engineering study",                 "Part V–b–1",   "IV. Collector"),
-        ("tc_c_coll_study_crash", "Include accident history in engineering study",               "Part V–b–1",   "IV. Collector"),
-        ("tc_c_coll_study_sidewalk","Note sidewalk status in engineering study",                 "Part V–b–1",   "IV. Collector"),
-        ("tc_c_coll_study_school","Address school walking route in engineering study",            "Part V–b–1",   "IV. Collector"),
-        ("tc_c_coll_study_t2",    "Outline applicable Tier 2 strategies in study",               "Part V–b–1",   "IV. Collector"),
-        # Local
-        ("tc_c_local_lanewidth",  "Confirm street is <30 ft wide (two lanes)",                  "Part VII",     "IV. Local"),
-        ("tc_c_local_grade",      "Confirm street grade ≤6%",                                   "Part VII",     "IV. Local"),
-        ("tc_c_local_speedlimit", "Confirm posted speed limit ≤30 mph",                         "Part VII",     "IV. Local"),
-        ("tc_c_local_notarterial","Confirm street is not arterial or collector",                 "Part VII",     "IV. Local"),
-        ("tc_c_local_cutthru",    "Identify cut-through or speeding problem (with data)",        "Part VII",     "IV. Local"),
-        ("tc_c_local_connection", "Confirm connection route or subdivision pass-through",        "Part VII",     "IV. Local"),
-        ("tc_c_hump_spacing",     "Verify minimum 2 humps; spacing 300–600 ft",                 "Part VII",     "IV. Local – Design"),
-        ("tc_c_hump_clearance",   "Verify 200-ft clearance from intersections and curves",      "Part VII",     "IV. Local – Design"),
-        ("tc_c_hump_dims",        "Verify hump height 3–4 in; 12-ft travel length",             "Part VII",     "IV. Local – Design"),
-        ("tc_c_hump_signage",     "Install regulatory 'Speed Control District' signs",          "Part VII",     "IV. Local – Design"),
-        ("tc_c_hump_warn",        "Install MUTCD advance warning signs and 15 MPH plate",       "Part VII",     "IV. Local – Design"),
-        ("tc_c_hump_markings",    "Install pavement markings per standard details",             "Part VII",     "IV. Local – Design"),
-        ("tc_c_hump_drainage",    "City Engineer reviews drainage at all hump locations",        "Part VII",     "IV. Local – Design"),
-        # Tier 1
-        ("tc_c_t1_study",         "Include Tier 1 strategy in study recommendation",            "Part V–b–1",   "V. Tier 1"),
-        ("tc_c_t1_petitioner",    "Staff meets with petitioner on study findings",              "Part V–b–1",   "V. Tier 1"),
-        ("tc_c_t1_implemented",   "Implement Tier 1 strategy",                                 "Part V–b–1",   "V. Tier 1"),
-        # Tier 2
-        ("tc_c_t2_validate",      "Conduct second study confirming Tier 1 ineffective",         "Part V–b–2",   "VI. Tier 2"),
-        ("tc_c_t2_trafficeng",    "Traffic Engineer reviews Tier 2 recommendation",             "Part V–b–2",   "VI. Tier 2"),
-        ("tc_c_t2_sep_petition",  "Prepare separate petition for each improvement",             "Part V–b–2",   "VI. Tier 2"),
-        ("tc_c_pet2_mailed",      "City mails second-round petitions (mailed twice)",           "Part V–b–2 / VII","VI. Tier 2"),
-        ("tc_c_pet2_hoa",         "Confirm votes not tied to HOA membership",                   "Part V–b–2 / VII","VI. Tier 2"),
-        ("tc_c_pet2_nonresp",     "Confirm non-responses counted as no votes",                  "Part V–b–2 / VII","VI. Tier 2"),
-        ("tc_c_costshare_agree",  "Obtain cost-share agreement (60%) from ≥2/3 households",    "Part VII",     "VI. Tier 2"),
-        ("tc_c_hoa_letter",       "Obtain HOA funding letter (if HOA is paying)",               "Part VII",     "VI. Tier 2"),
-        # Board
-        ("tc_c_public_meeting",   "Schedule public meeting",                                    "Part V–b–2",   "VIII. Board"),
-        ("tc_c_public_conducted", "Conduct public meeting; document input",                     "Part V–b–2",   "VIII. Board"),
-        ("tc_c_staff_rec",        "Prepare staff recommendation for Board",                     "Part V–b–2 / VII","VIII. Board"),
-        ("tc_c_board_res",        "Board adopts resolution approving location(s)",               "Part VII",     "VIII. Board"),
-        ("tc_c_board_action",     "Record Board action / outcome",                              "Part VII",     "VIII. Board"),
-        ("tc_c_design_final",     "Complete final design; City Engineer drainage review",       "Part VII",     "VIII. Board"),
-        ("tc_c_payment_rcvd",     "Receive 60% resident payment before installation",           "Part VII",     "VIII. Board"),
-        ("tc_c_installed",        "Improvements installed / constructed",                       "",             "VIII. Board"),
-        ("tc_c_archived",         "Complete application file archived",                         "",             "VIII. Board"),
-        ("tc_c_leftover_funds",   "Return leftover funds to petitioning group",                 "Part VII",     "VIII. Board"),
+        # Admin — applies to all
+        ("tc_c_hoa_gov",          "Confirm HOA governance status",                               "Part V",         "I. Admin",            "all"),
+        ("tc_c_hoa_req",          "Confirm HOA written request submitted or bypass justified",    "Part V / VII",   "I. Admin",            "all"),
+        ("tc_c_init_pet",         "Obtain initial >50% support petition",                        "Part V / VII",   "I. Admin",            "all"),
+        ("tc_c_pet_format",       "Verify one signature/printed name per residence",              "Part V",         "I. Admin",            "all"),
+        # Classification — applies to all
+        ("tc_c_not_private",      "Confirm public street (not gated/private)",                   "Part V / VII",   "II. Classification",  "all"),
+        ("tc_c_not_emergency",    "Confirm not a designated primary emergency route",             "Part V",         "II. Classification",  "all"),
+        ("tc_c_collector_list",   "Verify collector street list status",                         "Part V",         "II. Classification",  "collector"),
+        # Data — applies to all
+        ("tc_c_data_speed",       "Complete speed study (≥24-hr weekday)",                       "Part V–a",       "III. Data",           "all"),
+        ("tc_c_data_vol",         "Complete traffic count / ADT",                                "Part V–a / VII", "III. Data",           "all"),
+        ("tc_c_data_crash",       "Review crash history (12 months)",                            "Parts I–II",     "III. Data",           "all"),
+        ("tc_c_data_school",      "Confirm school route status",                                 "Part V–b–3",     "III. Data",           "all"),
+        ("tc_c_data_sidewalk",    "Confirm continuous sidewalk status",                          "Part V–b–3",     "III. Data",           "all"),
+        # Collector-specific criteria — only for Collector Street
+        ("tc_c_coll_speed_data",  "Collect ≥24-hr weekday speed data",                          "Part V–a",       "IV. Collector",       "collector"),
+        ("tc_c_coll_2lanes",      "Confirm street has ≤2 traffic lanes",                         "Part V–a",       "IV. Collector",       "collector"),
+        ("tc_c_coll_termini",     "Identify logical termini for calming treatment",              "Part V–a",       "IV. Collector",       "collector"),
+        ("tc_c_coll_study_vol",   "Include volume analysis in engineering study",                "Part V–b–1",     "IV. Collector",       "collector"),
+        ("tc_c_coll_study_speed", "Include speed analysis in engineering study",                 "Part V–b–1",     "IV. Collector",       "collector"),
+        ("tc_c_coll_study_crash", "Include accident history in engineering study",               "Part V–b–1",     "IV. Collector",       "collector"),
+        ("tc_c_coll_study_sidewalk","Note sidewalk status in engineering study",                 "Part V–b–1",     "IV. Collector",       "collector"),
+        ("tc_c_coll_study_school","Address school walking route in engineering study",            "Part V–b–1",     "IV. Collector",       "collector"),
+        ("tc_c_coll_study_t2",    "Outline applicable Tier 2 strategies in study",               "Part V–b–1",     "IV. Collector",       "collector"),
+        # Local-specific criteria — only for Local Residential Street
+        ("tc_c_local_lanewidth",  "Confirm street is <30 ft wide (two lanes)",                  "Part VII",       "IV. Local",           "local"),
+        ("tc_c_local_grade",      "Confirm street grade ≤6%",                                   "Part VII",       "IV. Local",           "local"),
+        ("tc_c_local_speedlimit", "Confirm posted speed limit ≤30 mph",                         "Part VII",       "IV. Local",           "local"),
+        ("tc_c_local_notarterial","Confirm street is not arterial or collector",                 "Part VII",       "IV. Local",           "local"),
+        ("tc_c_local_cutthru",    "Identify cut-through or speeding problem (with data)",        "Part VII",       "IV. Local",           "local"),
+        ("tc_c_local_connection", "Confirm connection route or subdivision pass-through",        "Part VII",       "IV. Local",           "local"),
+        ("tc_c_hump_spacing",     "Verify minimum 2 humps; spacing 300–600 ft",                 "Part VII",       "IV. Local – Design",  "local"),
+        ("tc_c_hump_clearance",   "Verify 200-ft clearance from intersections and curves",      "Part VII",       "IV. Local – Design",  "local"),
+        ("tc_c_hump_dims",        "Verify hump height 3–4 in; 12-ft travel length",             "Part VII",       "IV. Local – Design",  "local"),
+        ("tc_c_hump_signage",     "Install regulatory 'Speed Control District' signs",          "Part VII",       "IV. Local – Design",  "local"),
+        ("tc_c_hump_warn",        "Install MUTCD advance warning signs and 15 MPH plate",       "Part VII",       "IV. Local – Design",  "local"),
+        ("tc_c_hump_markings",    "Install pavement markings per standard details",             "Part VII",       "IV. Local – Design",  "local"),
+        ("tc_c_hump_drainage",    "City Engineer reviews drainage at all hump locations",        "Part VII",       "IV. Local – Design",  "local"),
+        # Tier 1 — applies to all
+        ("tc_c_t1_study",         "Include Tier 1 strategy in study recommendation",            "Part V–b–1",     "V. Tier 1",           "all"),
+        ("tc_c_t1_petitioner",    "Staff meets with petitioner on study findings",              "Part V–b–1",     "V. Tier 1",           "all"),
+        ("tc_c_t1_implemented",   "Implement Tier 1 strategy",                                 "Part V–b–1",     "V. Tier 1",           "all"),
+        # Tier 2 — applies to all
+        ("tc_c_t2_validate",      "Conduct second study confirming Tier 1 ineffective",         "Part V–b–2",     "VI. Tier 2",          "all"),
+        ("tc_c_t2_trafficeng",    "Traffic Engineer reviews Tier 2 recommendation",             "Part V–b–2",     "VI. Tier 2",          "all"),
+        ("tc_c_t2_sep_petition",  "Prepare separate petition for each improvement",             "Part V–b–2",     "VI. Tier 2",          "all"),
+        ("tc_c_pet2_mailed",      "City mails second-round petitions (mailed twice)",           "Part V–b–2 / VII","VI. Tier 2",         "all"),
+        ("tc_c_pet2_hoa",         "Confirm votes not tied to HOA membership",                   "Part V–b–2 / VII","VI. Tier 2",         "all"),
+        ("tc_c_pet2_nonresp",     "Confirm non-responses counted as no votes",                  "Part V–b–2 / VII","VI. Tier 2",         "all"),
+        ("tc_c_costshare_agree",  "Obtain cost-share agreement (60%) from ≥2/3 households",    "Part VII",       "VI. Tier 2",          "local"),
+        ("tc_c_hoa_letter",       "Obtain HOA funding letter (if HOA is paying)",               "Part VII",       "VI. Tier 2",          "local"),
+        # Board — applies to all
+        ("tc_c_public_meeting",   "Schedule public meeting",                                    "Part V–b–2",     "VIII. Board",         "all"),
+        ("tc_c_public_conducted", "Conduct public meeting; document input",                     "Part V–b–2",     "VIII. Board",         "all"),
+        ("tc_c_staff_rec",        "Prepare staff recommendation for Board",                     "Part V–b–2 / VII","VIII. Board",        "all"),
+        ("tc_c_board_res",        "Board adopts resolution approving location(s)",               "Part VII",       "VIII. Board",         "all"),
+        ("tc_c_board_action",     "Record Board action / outcome",                              "Part VII",       "VIII. Board",         "all"),
+        ("tc_c_design_final",     "Complete final design; City Engineer drainage review",       "Part VII",       "VIII. Board",         "all"),
+        ("tc_c_payment_rcvd",     "Receive 60% resident payment before installation",           "Part VII",       "VIII. Board",         "local"),
+        ("tc_c_installed",        "Improvements installed / constructed",                       "",               "VIII. Board",         "all"),
+        ("tc_c_archived",         "Complete application file archived",                         "",               "VIII. Board",         "all"),
+        ("tc_c_leftover_funds",   "Return leftover funds to petitioning group",                 "Part VII",       "VIII. Board",         "all"),
     ]
 
-    pending = [(k, lbl, cite, sec) for k, lbl, cite, sec in ALL_ACTIONS if not data.get(k)]
-    done    = [(k, lbl, cite, sec) for k, lbl, cite, sec in ALL_ACTIONS if data.get(k)]
+    # Filter to only the actions relevant to this application's classification.
+    # "all" items always appear. "local" items only for Local Residential Street.
+    # "collector" items only for Collector Street.
+    def applies(classification_tag):
+        if classification_tag == "all":
+            return True
+        if classification_tag == "local" and is_local:
+            return True
+        if classification_tag == "collector" and is_collector:
+            return True
+        return False
+
+    relevant = [(k, lbl, cite, sec) for k, lbl, cite, sec, cls in ALL_ACTIONS if applies(cls)]
+    pending  = [(k, lbl, cite, sec) for k, lbl, cite, sec in relevant if not data.get(k)]
+    done     = [(k, lbl, cite, sec) for k, lbl, cite, sec in relevant if data.get(k)]
 
     # Completed items
     h2(f"Completed Steps ({len(done)} items)")
