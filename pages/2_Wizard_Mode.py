@@ -1580,18 +1580,24 @@ def render_traffic_calming_wizard():
     st.divider()
     col1, col2 = st.columns([3, 1])
     with col1:
+        # Generate the document and store it in session state so the download
+        # button can render unconditionally. Nesting st.download_button inside
+        # if st.button() causes a DuplicateWidgetID error on the second click
+        # because the key persists in session state between renders.
         if st.button("Generate Word Document - Checklist + Action Items",
                      type="primary", use_container_width=True, key="btn_tc_export"):
-            import traceback as _tb
+            import traceback as _tb, datetime as _dt
             try:
-                import datetime as _dt
-                # Build data dict — skip non-serializable objects like UploadedFile
+                # Build data dict inside the try block so any error is caught.
+                # Filter to only safe serializable types — skip UploadedFile
+                # objects and other widget-internal objects that can crash.
                 data = {}
                 for k, v in st.session_state.items():
                     if not k.startswith("tc_"):
                         continue
-                    if isinstance(v, (_dt.date, _dt.datetime, str, bool, int,
-                                      float, list, dict, type(None))):
+                    if isinstance(v, (_dt.date, _dt.datetime,
+                                      str, bool, int, float,
+                                      list, dict, type(None))):
                         data[k] = v
 
                 buf = build_traffic_calming_report(
@@ -1609,13 +1615,15 @@ def render_traffic_calming_wizard():
                 st.session_state.pop("_tc_doc_error", None)
             except Exception:
                 st.session_state.pop("_tc_doc_bytes", None)
+                # Store full traceback in session state so it persists across
+                # the automatic rerun that follows every button click
                 st.session_state["_tc_doc_error"] = _tb.format_exc()
 
-        # Persistent error — stored in session state so it survives the rerun
+        # Persistent error display — visible after the rerun
         if st.session_state.get("_tc_doc_error"):
-            st.error("Report generation failed:")
+            st.error("Report generation failed — details below:")
             st.code(st.session_state["_tc_doc_error"])
-            if st.button("Dismiss", key="btn_tc_err_dismiss"):
+            if st.button("Dismiss error", key="btn_tc_err_dismiss"):
                 st.session_state.pop("_tc_doc_error", None)
                 st.rerun()
 
