@@ -149,7 +149,7 @@ TIER2_STRATEGIES = [
     ("Chicanes",                                             "Part V–b Tier 2"),
     ("Speed tables / raised crosswalks",                     "Part V–b Tier 2"),
     ("Textured pavements",                                   "Part V–b Tier 2"),
-    ("Speed humps - LOCAL STREETS ONLY, not collectors",     "Part V–b Tier 2 Note; Part VII"),
+    ("Speed humps — LOCAL STREETS ONLY, not collectors",     "Part V–b Tier 2 Note; Part VII"),
     ("Other strategy (requires City Commission approval)",   "Part V–b Tier 2"),
 ]
 
@@ -194,5 +194,105 @@ SCORING_CRITERIA = [
         "max":   10,
         "basis": "0 pts if continuous sidewalk EXISTS; 10 pts if NO continuous sidewalk",
         "cite":  "Part V–b–3",
+    },
+]
+
+# ==============================================================================
+# APPENDIX SECTIONS
+# Source: Internal — City of Brentwood Engineering Department workflow
+#
+# Each entry defines one appendix section for the Traffic Calming Application
+# review packet. The 'attachments' list contains standard attachment types for
+# that section. Add, remove, or rename entries here as your workflow evolves —
+# no changes needed in the wizard or report builder.
+#
+# Structure:
+#   letter:      Appendix letter (A, B, C, ...)
+#   title:       Short section title shown on the cover page
+#   section_ref: Which form section this corresponds to
+#   attachments: List of standard attachment names (shown as checkboxes in the form)
+# ==============================================================================
+APPENDIX_SECTIONS = [
+    {
+        "letter":      "A",
+        "title":       "Administrative",
+        "section_ref": "Section I",
+        "attachments": [
+            "Initial petition with signatures",
+            "HOA written request or authorization letter",
+            "HOA funding letter (if HOA is paying cost-share)",
+            "Petitioner contact information",
+            "Other administrative correspondence",
+        ],
+    },
+    {
+        "letter":      "B",
+        "title":       "Data Collection & Field Review",
+        "section_ref": "Section III",
+        "attachments": [
+            "Speed study (24-hour weekday minimum)",
+            "Traffic count / ADT report",
+            "Crash history report (12-month minimum)",
+            "School walking route confirmation",
+            "Sidewalk inventory / field photos",
+            "Field review notes",
+        ],
+    },
+    {
+        "letter":      "C",
+        "title":       "Engineering Study",
+        "section_ref": "Sections IV–V",
+        "attachments": [
+            "Engineering study report",
+            "Traffic Engineer review memo or approval",
+            "Tier 1 strategy recommendation",
+            "Tier 2 strategy recommendation",
+            "Design drawings or sketches",
+        ],
+    },
+    {
+        "letter":      "D",
+        "title":       "Second Petition & Voting",
+        "section_ref": "Section VI",
+        "attachments": [
+            "Second-round petition (mailed ballot)",
+            "Voting results summary",
+            "Extension request documentation (if applicable)",
+            "Proof of City mailing (sent twice)",
+        ],
+    },
+    {
+        "letter":      "E",
+        "title":       "Cost Estimates & Agreements",
+        "section_ref": "Section VII",
+        "attachments": [
+            "Engineer's cost estimate",
+            "Contractor quote(s)",
+            "Cost-share agreement signed by residents",
+            "60% resident payment receipt",
+        ],
+    },
+    {
+        "letter":      "F",
+        "title":       "Board Action",
+        "section_ref": "Section VIII",
+        "attachments": [
+            "Public meeting notice",
+            "Public meeting sign-in sheet and input summary",
+            "Staff recommendation memo to Board",
+            "Board resolution (adopted prior to installation)",
+            "Board meeting minutes excerpt",
+        ],
+    },
+    {
+        "letter":      "G",
+        "title":       "General / Other",
+        "section_ref": "All Sections",
+        "attachments": [
+            "Aerial map or site exhibit",
+            "Site photographs",
+            "Correspondence with residents",
+            "Correspondence with other City departments",
+        ],
     },
 ]

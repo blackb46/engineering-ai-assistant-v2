@@ -543,3 +543,289 @@ def build_traffic_calming_report(data: dict, scoring_criteria: list = None) -> B
     doc.save(buf)
     buf.seek(0)
     return buf
+
+
+def build_appendix_document(data: dict, appendix_sections: list = None) -> BytesIO:
+    """
+    Build a separate Word document containing appendix cover pages for the
+    Traffic Calming Application review packet.
+
+    For each appendix section that has at least one attachment checked, generates:
+      - A cover page showing the appendix letter, section title, case info,
+        and a formatted list of included attachments
+      - A blank placeholder page for each attachment (labeled for manual insertion)
+
+    Sections with no attachments checked are skipped entirely.
+
+    Args:
+        data (dict):              Session state values (tc_ keys)
+        appendix_sections (list): APPENDIX_SECTIONS from traffic_calming_data.py
+
+    Returns:
+        BytesIO: Buffer containing the completed .docx file
+    """
+    from docx import Document
+    from docx.shared import Pt, RGBColor, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    if not appendix_sections:
+        appendix_sections = []
+
+    # Brand colors
+    NAVY   = RGBColor(0x1B, 0x3A, 0x6B)
+    ORANGE = RGBColor(0xE8, 0x65, 0x1A)
+    GREY   = RGBColor(0x8A, 0x82, 0x78)
+    BLACK  = RGBColor(0x22, 0x22, 0x22)
+
+    doc = Document()
+
+    # Page setup: US Letter, 1-inch margins
+    sec = doc.sections[0]
+    sec.page_width   = Inches(8.5)
+    sec.page_height  = Inches(11)
+    sec.left_margin  = sec.right_margin  = Inches(1.0)
+    sec.top_margin   = sec.bottom_margin = Inches(1.0)
+
+    def get(key):
+        return data.get(key) or ""
+
+    def page_break():
+        p = doc.add_paragraph()
+        run = p.add_run()
+        run.add_break(__import__('docx.oxml.ns', fromlist=['qn'])
+                      .__class__)  # placeholder — use OxmlElement below
+        p._element.clear()
+        from docx.oxml import OxmlElement as OE
+        br = OE('w:p')
+        r  = OE('w:r')
+        b  = OE('w:br')
+        b.set(qn('w:type'), 'page')
+        r.append(b)
+        br.append(r)
+        doc._body._body.append(br)
+
+    def divider():
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(4)
+        p.paragraph_format.space_after  = Pt(4)
+        pPr = p._p.get_or_add_pPr()
+        pBdr = OxmlElement('w:pBdr')
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'),   'single')
+        bottom.set(qn('w:sz'),    '6')
+        bottom.set(qn('w:color'), '1B3A6B')
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+
+    # Header info for cover pages
+    case_num   = get("tc_case_num")
+    street_nm  = get("tc_street_name")
+    street_cls = get("tc_street_class")
+    id_line    = "  —  ".join(p for p in [case_num, street_nm] if p) or "Traffic Calming Application"
+
+    # Track whether we've added any content (for page break logic)
+    first_section = True
+
+    for section in appendix_sections:
+        letter = section["letter"]
+        title  = section["title"]
+        attachments = section.get("attachments", [])
+
+        # Collect which attachments are checked
+        checked_items = []
+        for i, att_name in enumerate(attachments):
+            key = f"tc_att_{letter}_{i}"
+            if data.get(key):
+                checked_items.append(att_name)
+
+        # Include "Other" if filled in
+        other_key = f"tc_att_{letter}_other"
+        other_val = (data.get(other_key) or "").strip()
+        if other_val:
+            checked_items.append(f"Other: {other_val}")
+
+        # Skip sections with no attachments checked
+        if not checked_items:
+            continue
+
+        # Page break between sections (not before the first)
+        if not first_section:
+            # Add a page break paragraph
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after  = Pt(0)
+            run = p.add_run()
+            br = OxmlElement('w:br')
+            br.set(qn('w:type'), 'page')
+            run._r.append(br)
+
+        first_section = False
+
+        # ── COVER PAGE ────────────────────────────────────────────────────
+
+        # Title bar
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = p.add_run("TRAFFIC CALMING APPLICATION")
+        r.font.size  = Pt(13)
+        r.font.bold  = True
+        r.font.color.rgb = NAVY
+
+        p2 = doc.add_paragraph()
+        p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r2 = p2.add_run(
+            "City of Brentwood, Tennessee  ·  Resolution 2026-12  ·  Engineering Department"
+        )
+        r2.font.size  = Pt(9)
+        r2.font.color.rgb = ORANGE
+
+        if id_line:
+            p3 = doc.add_paragraph()
+            p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r3 = p3.add_run(id_line)
+            r3.font.size  = Pt(11)
+            r3.font.bold  = True
+            r3.font.color.rgb = NAVY
+
+        divider()
+        doc.add_paragraph()
+
+        # Big appendix letter
+        p_letter = doc.add_paragraph()
+        p_letter.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_letter = p_letter.add_run(f"APPENDIX {letter}")
+        r_letter.font.size  = Pt(36)
+        r_letter.font.bold  = True
+        r_letter.font.color.rgb = NAVY
+
+        p_title = doc.add_paragraph()
+        p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_title = p_title.add_run(title)
+        r_title.font.size  = Pt(18)
+        r_title.font.bold  = False
+        r_title.font.color.rgb = ORANGE
+
+        p_ref = doc.add_paragraph()
+        p_ref.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_ref = p_ref.add_run(section.get("section_ref", ""))
+        r_ref.font.size    = Pt(10)
+        r_ref.italic       = True
+        r_ref.font.color.rgb = GREY
+
+        doc.add_paragraph()
+        divider()
+        doc.add_paragraph()
+
+        # Attachment list heading
+        p_hd = doc.add_paragraph()
+        r_hd = p_hd.add_run("Attachments Included in This Section:")
+        r_hd.font.size  = Pt(11)
+        r_hd.font.bold  = True
+        r_hd.font.color.rgb = NAVY
+        p_hd.paragraph_format.space_after = Pt(6)
+
+        # Each checked attachment
+        for item in checked_items:
+            p_item = doc.add_paragraph(style='List Bullet')
+            p_item.paragraph_format.left_indent  = Inches(0.25)
+            p_item.paragraph_format.space_after  = Pt(3)
+            r_item = p_item.add_run(item)
+            r_item.font.size = Pt(11)
+            r_item.font.color.rgb = BLACK
+
+        doc.add_paragraph()
+
+        # Count line
+        p_count = doc.add_paragraph()
+        p_count.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_count = p_count.add_run(
+            f"{len(checked_items)} attachment{'s' if len(checked_items) != 1 else ''} — "
+            f"insert behind this cover page in the order listed above"
+        )
+        r_count.font.size    = Pt(9)
+        r_count.italic       = True
+        r_count.font.color.rgb = GREY
+
+        divider()
+
+        # ── PLACEHOLDER PAGES — one per attachment ─────────────────────────
+        for item in checked_items:
+            # Page break before each placeholder
+            p_brk = doc.add_paragraph()
+            run_brk = p_brk.add_run()
+            br = OxmlElement('w:br')
+            br.set(qn('w:type'), 'page')
+            run_brk._r.append(br)
+
+            # Placeholder content
+            doc.add_paragraph()
+            doc.add_paragraph()
+            doc.add_paragraph()
+
+            p_app = doc.add_paragraph()
+            p_app.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_app = p_app.add_run(f"APPENDIX {letter}")
+            r_app.font.size  = Pt(14)
+            r_app.font.bold  = True
+            r_app.font.color.rgb = GREY
+
+            doc.add_paragraph()
+
+            p_ins = doc.add_paragraph()
+            p_ins.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_ins = p_ins.add_run("INSERT ATTACHMENT HERE")
+            r_ins.font.size  = Pt(20)
+            r_ins.font.bold  = True
+            r_ins.font.color.rgb = NAVY
+
+            doc.add_paragraph()
+
+            p_nm = doc.add_paragraph()
+            p_nm.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_nm = p_nm.add_run(item)
+            r_nm.font.size  = Pt(14)
+            r_nm.font.bold  = False
+            r_nm.font.color.rgb = ORANGE
+
+            doc.add_paragraph()
+            divider()
+
+    # If nothing was checked, add a message page
+    if first_section:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = p.add_run(
+            "No attachments selected. Use the Appendix attachment panels "
+            "in each form section to indicate which documents are included."
+        )
+        r.font.size = Pt(11)
+        r.font.color.rgb = GREY
+        r.italic = True
+
+    # Footer timestamp
+    doc.add_paragraph()
+    try:
+        import pytz
+        cst = pytz.timezone("America/Chicago")
+        now_cst = datetime.now(cst)
+        timestamp = now_cst.strftime("%B %d, %Y  %I:%M %p CST")
+    except Exception:
+        timestamp = datetime.now().strftime("%B %d, %Y  %I:%M %p")
+
+    foot = doc.add_paragraph(
+        f"Appendix generated: {timestamp}  |  "
+        "Policy: Resolution 2026-12, City of Brentwood, TN (adopted 02/09/2026)  |  "
+        "Engineering Department"
+    )
+    foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in foot.runs:
+        run.font.size   = Pt(7.5)
+        run.italic      = True
+        run.font.color.rgb = GREY
+
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
