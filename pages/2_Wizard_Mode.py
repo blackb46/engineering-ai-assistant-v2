@@ -1162,8 +1162,21 @@ def render_traffic_calming_wizard():
         with col1:
             tc_date("Tier 1 Implementation Date", key="tc_t1_date")
         with col2:
+            # Six-month review date auto-calculated from implementation date.
+            # Displayed as an informational marker; user can still set the date
+            # manually via the picker to record when the actual review occurred.
+            _t1_val = st.session_state.get("tc_t1_date")
+            if _t1_val and not st.session_state.get("tc_t1_review_date"):
+                import datetime as _dt
+                import calendar as _cal
+                _m = _t1_val.month + 6
+                _y = _t1_val.year + (_m - 1) // 12
+                _m = (_m - 1) % 12 + 1
+                _d = min(_t1_val.day, _cal.monthrange(_y, _m)[1])
+                _auto_review = _dt.date(_y, _m, _d)
+                st.session_state["tc_t1_review_date"] = _auto_review
             tc_date("Six-Month Effectiveness Review Date", key="tc_t1_review_date",
-                    help_text="6 months after implementation — effectiveness re-evaluated at this date")
+                    help_text="Auto-calculated as 6 months after implementation date. Select a different date to override.")
         st.checkbox("Study recommendation includes one or more Tier 1 strategies  [Part V-b-1]",
                     key="tc_c_t1_study")
         st.checkbox("Staff met with petitioner to outline study recommendations  [Part V-b-1]",
@@ -1347,7 +1360,7 @@ def render_traffic_calming_wizard():
         st.checkbox("Resident 60% payment received prior to installation "
                     "(local streets - must be within 6 months of Board approval)  [Part VII]",
                     key="tc_c_cost_payment")
-        st.text_area("Cost / Funding Notes", key="tc_cost_notes", height=60)
+        st.text_area("Cost / Funding Notes", key="tc_cost_notes", height=100)
 
     # =========================================================================
     # SECTION VIII: BOARD ACTION
@@ -1379,7 +1392,7 @@ def render_traffic_calming_wizard():
         st.checkbox("Any leftover funds returned to petitioning group upon project completion  [Part VII]",
                     key="tc_c_leftover_funds")
         st.text_area("Staff Recommendation Summary", key="tc_staff_rec_notes", height=80)
-        st.text_area("Final / Closeout Notes", key="tc_final_notes", height=60)
+        st.text_area("Final / Closeout Notes", key="tc_final_notes", height=100)
 
     # =========================================================================
     # EXPORT / CLEAR
