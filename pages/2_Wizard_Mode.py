@@ -818,23 +818,36 @@ def render_traffic_calming_wizard():
         Also writes a formatted string to key + '_str' so the report builder
         can read it without needing to handle date objects.
 
-        override_value: pass a datetime.date to pre-fill the picker without
-        writing to session state directly (avoids the Streamlit warning about
-        setting a widget value via both value= and session state).
-        Only used when the field has not yet been set by the user.
+        Streamlit raises a warning when both key= and value= are used and the
+        key already exists in session state (set via the Session State API).
+        To avoid this: if the key is already in session state, omit value=
+        entirely and let Streamlit read the value from session state on its own.
+        Only pass value= when the key is absent (first render) or when an
+        override_value is provided for auto-calculation purposes.
         """
         import datetime as dt
-        # Determine the value to show: prefer what's already in session state
-        # (user's own selection), then fall back to override_value, then None.
         current = st.session_state.get(key, None)
-        display_value = current if current is not None else override_value
-        val = st.date_input(
-            label,
-            value=display_value,
-            key=key,
-            help=help_text,
-            format="MM/DD/YYYY",
-        )
+
+        if current is not None:
+            # Key already in session state (user selected it or it was loaded).
+            # Don't pass value= — Streamlit reads from session state via key=.
+            val = st.date_input(
+                label,
+                key=key,
+                help=help_text,
+                format="MM/DD/YYYY",
+            )
+        else:
+            # Key absent — pass value= to set the initial display.
+            # Use override_value (e.g. auto-calculated date) if provided, else None.
+            val = st.date_input(
+                label,
+                value=override_value,
+                key=key,
+                help=help_text,
+                format="MM/DD/YYYY",
+            )
+
         # Write formatted string for the report builder
         date_str = val.strftime("%m/%d/%Y") if isinstance(val, dt.date) else ""
         st.session_state[key + "_str"] = date_str
@@ -845,17 +858,31 @@ def render_traffic_calming_wizard():
     # =========================================================================
 
     def _tc_filename():
-        """Build a safe filename from case number + street name."""
+        """
+        Build filename: TC-2026-002 - Maple Street progress-20260325.json
+        Case number and street name are used as-is (spaces preserved).
+        Characters illegal in filenames are stripped. Date is today in YYYYMMDD.
+        """
         import re
-        case   = st.session_state.get("tc_case_num", "") or ""
-        street = st.session_state.get("tc_street_name", "") or ""
-        parts  = [p for p in [case, street] if p]
-        raw    = "_".join(parts) if parts else "TC_progress"
-        # Replace spaces and common punctuation with underscores, strip the rest
-        safe = re.sub(r"[\s/\\:*?\"<>|]+", "_", raw)
-        safe = re.sub(r"[^\w\-]", "", safe)
-        safe = re.sub(r"_+", "_", safe).strip("_")
-        return f"{safe}_progress.json"
+        from datetime import date
+        case   = (st.session_state.get("tc_case_num",   "") or "").strip()
+        street = (st.session_state.get("tc_street_name", "") or "").strip()
+        # Strip characters illegal in Windows/Mac/Linux filenames,
+        # then collapse any double spaces left behind (e.g. from "A / B" -> "A  B")
+        def _clean(s):
+            s = re.sub(r'[\\/:*?"<>|]', "", s)
+            return re.sub(r'  +', ' ', s).strip()
+        case   = _clean(case)
+        street = _clean(street)
+        today  = date.today().strftime("%Y%m%d")
+        if case and street:
+            return f"{case} - {street} progress-{today}.json"
+        elif case:
+            return f"{case} progress-{today}.json"
+        elif street:
+            return f"{street} progress-{today}.json"
+        else:
+            return f"TC progress-{today}.json"
 
     # Keys that belong to Streamlit widgets internally and must never be
     # saved or restored — writing to them via session state raises errors.
