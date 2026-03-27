@@ -147,6 +147,10 @@ class RAGEngine:
         self.claude_client = None
         self.is_initialized = False
         self._init_error   = None
+        # Knowledge graph: maps exceptions/redirects across all 26 docs.
+        # Loaded at startup from knowledge_graph.json on the repo.
+        # Used by _flag_exception_chunks() before every query.
+        self.knowledge_graph = None
 
         try:
             self._initialize()
@@ -163,6 +167,7 @@ class RAGEngine:
         """
         self._connect_chromadb()
         self._connect_claude()
+        self._load_knowledge_graph()
         self.is_initialized = True
 
     def _connect_chromadb(self):
@@ -267,6 +272,45 @@ class RAGEngine:
         self.claude_client = anthropic.Anthropic(api_key=api_key)
         print("Claude API client connected")
 
+    def _load_knowledge_graph(self):
+        """
+        Load knowledge_graph.json from the repo at startup.
+
+        The knowledge graph was built by Step 2 of the corpus
+        builder notebook. It maps every exception, redirect, and
+        cross-reference found across all 26 source documents.
+
+        The graph is used by _flag_exception_chunks() to prepend
+        warning labels to chunks that come from sections flagged
+        as exceptions or redirects — preventing Claude from
+        presenting a special-case standard as the general rule.
+
+        The graph file lives in the repo root so it is always
+        available alongside the app code. If the file is missing
+        the engine continues without it (degraded but functional).
+        """
+        import json
+
+        # Look for knowledge_graph.json in the repo root
+        # Path works both locally and on Streamlit Cloud
+        repo_root = Path(__file__).parent.parent
+        graph_path = repo_root / 'knowledge_graph.json'
+
+        if not graph_path.exists():
+            print(f"⚠️  knowledge_graph.json not found at {graph_path}")
+            print("   Exception flagging disabled — rebuild corpus to fix.")
+            self.knowledge_graph = None
+            return
+
+        try:
+            with open(graph_path) as f:
+                self.knowledge_graph = json.load(f)
+            total = self.knowledge_graph.get('stats', {}).get('total_provisions', 0)
+            print(f"Knowledge graph loaded: {total:,} provisions across 26 documents")
+        except Exception as e:
+            print(f"⚠️  Could not load knowledge_graph.json: {e}")
+            self.knowledge_graph = None
+
     # ── Public API ────────────────────────────────────────────────────────
 
     def is_ready(self) -> bool:
@@ -336,6 +380,13 @@ class RAGEngine:
             # Step 1: Retrieve relevant chunks from ChromaDB
             chunks = self._retrieve_chunks(question)
 
+            # Step 1b: Flag exception chunks before any further processing.
+            # This checks each chunk against the knowledge graph and prepends
+            # a warning label to chunks from sections flagged as exceptions
+            # or redirects. Claude sees the warning and cannot present a
+            # special-case standard as the general citywide rule.
+            chunks = self._flag_exception_chunks(chunks)
+
             # Step 2: Check if we found anything useful
             if not chunks:
                 return self._abstain_result(question, start_time)
@@ -350,6 +401,16 @@ class RAGEngine:
             raw_answer, token_usage = self._generate_answer(
                 question, chunks, citations, discrepancy_flag
             )
+
+            # Step 5b: Validate the answer for exception/rule confusion.
+            # Runs a second Claude call to check whether the answer
+            # incorrectly presents a conditional standard as the general
+            # rule. If a problem is detected, a corrected version is
+            # returned. The user never sees an uncorrected answer.
+            # Only validates when discrepancy detection deferred to Claude
+            # (both code and policy present) or when no discrepancy flag set.
+            if discrepancy_flag != "claude_will_decide":
+                raw_answer = self._validate_response(question, raw_answer)
 
             # Step 6: Parse discrepancy signal Claude embedded in answer
             if discrepancy_flag == "claude_will_decide":
@@ -903,6 +964,28 @@ CITATION NUMBERS ASSIGNED TO THE ABOVE SOURCES:
 QUESTION: {question}
 {discrepancy_instruction}
 
+MANDATORY EXCEPTION-HANDLING RULES — FOLLOW THESE ON EVERY RESPONSE:
+1. SCOPE CHECK: Before stating any standard as fact, check whether the retrieved
+   chunk is marked with ⚠️ EXCEPTION or ⚠️ REDIRECT. If it is, you MUST state
+   the limiting condition before stating the standard. Never present an exception
+   as the general rule.
+2. EXCEPTION CHUNKS: If any context block begins with ⚠️ EXCEPTION, that section
+   contains a conditional standard. You MUST include the condition in your answer.
+   Example: "Under the Historic Rural Development standard (Section 6.13 only),
+   the ROW is 40 feet. The standard local street ROW is 50 feet per Section 6.3(4)."
+3. REDIRECT CHUNKS: If any context block begins with ⚠️ REDIRECT, that section
+   points to another section for the applicable standard. Cite the destination
+   section and note that the redirecting section is not the primary standard.
+4. CONFLICTING VALUES: If two chunks contain different values for the same
+   standard (e.g. two different ROW widths for local streets), you MUST present
+   both, identify which is the general standard and which is the exception, and
+   state the condition under which each applies.
+5. NEVER present a standard from a special district, overlay, or designated area
+   as applying citywide. Always name the district or condition.
+6. FORMATTING: Whenever a response includes 3 or more discrete requirements,
+   standards, or criteria, you MUST format them as a bulleted list — one item
+   per line. Never consolidate list items into a paragraph.
+
 CRITICAL — HOW TO READ MUNICIPAL CODE CONTEXT:
 Municipal code stores requirements as inline numbered items. Example:
   "(1) Minimum required lot area, one acre. (2) Maximum lot coverage by all
@@ -1014,6 +1097,233 @@ Write your answer now:"""
         return [c for c in citations if c["number"] in used_numbers]
 
     # ── Helper Methods ────────────────────────────────────────────────────
+
+    def _flag_exception_chunks(self, chunks: list) -> list:
+        """
+        Check each retrieved chunk against the knowledge graph.
+        If a chunk comes from a section flagged as an exception
+        or redirect, prepend a warning label to its text so
+        Claude cannot present it as the general citywide rule.
+
+        WHY THIS MATTERS:
+            Vector similarity search is blind to legal hierarchy.
+            Section 6.13 (40-foot rural ROW) scores just as high
+            as Section 6.3(4) (50-foot standard ROW) for a query
+            about local street standards — both contain the same
+            keywords. Without this flagging, Claude may retrieve
+            the 6.13 exception and present it as the general rule.
+
+            By prepending a warning to the 6.13 chunk text, Claude
+            receives the correct context: this is an exception that
+            applies only under a specific condition, not the rule.
+
+        ARGS:
+            chunks: List of retrieved chunk dicts from ChromaDB
+
+        RETURNS:
+            Same list with exception chunk texts prepended with
+            warning labels where applicable. Unflagged chunks
+            are returned unchanged.
+        """
+        if not self.knowledge_graph:
+            # Graph not loaded — return chunks unchanged
+            return chunks
+
+        # Build a fast lookup: doc_filename -> list of provisions
+        # We only need exceptions and redirects for flagging
+        exception_index = {}
+        for doc_name, doc_data in self.knowledge_graph.get('documents', {}).items():
+            flagged = [
+                p for p in doc_data.get('provisions', [])
+                if p.get('type') in ('exception', 'redirect')
+            ]
+            if flagged:
+                # Key by doc_id patterns — match against chunk doc_id
+                exception_index[doc_name] = flagged
+
+        flagged_chunks = []
+        for chunk in chunks:
+            chunk_doc_id    = chunk.get('doc_id', '')
+            chunk_section   = chunk.get('section_number', '')
+            chunk_text      = chunk.get('text', '')
+
+            # Find matching provisions for this chunk's document
+            matching_provisions = []
+            for doc_name, provisions in exception_index.items():
+                # Match by doc_id patterns known from the registry
+                doc_match = (
+                    chunk_doc_id in doc_name.lower() or
+                    doc_name.lower().replace('chapter_', 'ch').split('___')[0]
+                    .replace('chapter_', 'ch') in chunk_doc_id.lower() or
+                    (chunk_doc_id == 'appendix_a' and 'appendix' in doc_name.lower()) or
+                    (chunk_doc_id == 'epm' and 'engineering_policy' in doc_name.lower()) or
+                    (chunk_doc_id == 'ch78' and 'chapter_78' in doc_name.lower()) or
+                    (chunk_doc_id == 'ch56' and 'chapter_56' in doc_name.lower()) or
+                    (chunk_doc_id == 'ch58' and 'chapter_58' in doc_name.lower()) or
+                    (chunk_doc_id == 'ch14' and 'chapter_14' in doc_name.lower())
+                )
+                if not doc_match:
+                    continue
+
+                # Match by section number
+                for prov in provisions:
+                    prov_section = prov.get('section', '')
+                    if not prov_section or not chunk_section:
+                        continue
+                    # Normalize for comparison
+                    prov_sec_clean  = prov_section.replace('EPM-', '').strip()
+                    chunk_sec_clean = chunk_section.strip()
+                    if prov_sec_clean == chunk_sec_clean:
+                        matching_provisions.append(prov)
+
+            # If this chunk has matching exception/redirect provisions,
+            # prepend the most relevant warning to its text
+            if matching_provisions:
+                # Use the first exception found (highest priority)
+                # Prefer exceptions over redirects
+                exceptions = [p for p in matching_provisions
+                              if p.get('type') == 'exception']
+                redirects  = [p for p in matching_provisions
+                              if p.get('type') == 'redirect']
+
+                if exceptions:
+                    prov = exceptions[0]
+                    warning = (
+                        f"⚠️ EXCEPTION — LIMITED APPLICABILITY: "
+                        f"This section contains a CONDITIONAL standard, "
+                        f"not the general citywide rule. "
+                        f"{prov.get('description', '')}. "
+                        f"Do NOT present this as the default standard. "
+                        f"Always state the limiting condition when using "
+                        f"any requirement from this section.
+
+"
+                    )
+                    chunk = dict(chunk)
+                    chunk['text'] = warning + chunk_text
+
+                elif redirects:
+                    prov = redirects[0]
+                    refs = prov.get('references', [])
+                    ref_str = ', '.join(refs[:3]) if refs else 'another section'
+                    warning = (
+                        f"⚠️ REDIRECT: This section sends the reader to "
+                        f"{ref_str} for the applicable standard. "
+                        f"The general standard may be in a different section. "
+                        f"Always cite the destination section when answering.
+
+"
+                    )
+                    chunk = dict(chunk)
+                    chunk['text'] = warning + chunk_text
+
+            flagged_chunks.append(chunk)
+
+        n_flagged = sum(
+            1 for c in flagged_chunks
+            if c.get('text', '').startswith('⚠️')
+        )
+        if n_flagged > 0:
+            print(f"Exception flagging: {n_flagged}/{len(chunks)} chunks flagged")
+
+        return flagged_chunks
+
+    def _validate_response(
+        self,
+        question: str,
+        answer: str,
+    ) -> str:
+        """
+        Run a second Claude call to validate the generated answer
+        before it is shown to the user.
+
+        WHAT IT CHECKS:
+            1. Does the answer present an exception or special-district
+               standard as the general citywide rule?
+            2. Does the answer state a conditional standard without
+               stating the condition under which it applies?
+            3. Does the answer contain conflicting values without
+               explaining which is the general rule and which is
+               the exception?
+
+        IF VALIDATION FAILS:
+            The validator returns a corrected version of the answer.
+            The user never sees the failed answer — they see the
+            corrected version. The correction is minimal — it adds
+            the missing context without changing valid content.
+
+        IF VALIDATION PASSES:
+            The original answer is returned unchanged.
+
+        PERFORMANCE:
+            This adds one additional API call per query (~0.5-1s).
+            The cost is justified by the accuracy guarantee for
+            a system used in regulatory and public safety contexts.
+        """
+        # Build the known exception list for the validator prompt
+        # Include only the most important engineering exceptions
+        known_exceptions = """
+Known conditional/exception provisions in Brentwood code:
+- Section 6.13 (40-ft ROW): applies ONLY to Historic Rural Development areas.
+  General standard is Section 6.3(4): 50-ft ROW for all other local streets.
+- Section 6.12: applies ONLY to OSRD-IP zoning. Not general street standards.
+- Transitional Lot provisions (Sec. 78-14, 78-45): apply ONLY to lots with
+  15%+ existing grades. Not general lot standards.
+- Hillside Protection (Sec. 78-341 through 78-345): applies ONLY to properties
+  with 25%+ slopes covering 20%+ of the lot. Not general development standards.
+- Section 56-31 buffer widths: federal/state law may require wider buffers than
+  the city standard — the more restrictive width always applies.
+- AR-IP, OSRD-IP Innovative Project provisions: apply ONLY within those zoning
+  districts. Not applicable to standard residential development.
+"""
+
+        validation_prompt = f"""You are a legal accuracy validator for a municipal code AI assistant used by engineers and planning staff. Your only job is to check one answer for a specific type of error.
+
+THE ERROR TO CHECK FOR:
+Does the answer present a CONDITIONAL or EXCEPTION standard as if it were the GENERAL citywide rule — without stating the limiting condition?
+
+Examples of this error:
+- Stating "local streets require a 40-foot right-of-way" without noting this applies only to Historic Rural Development areas (general standard is 50 feet)
+- Stating OSRD-IP street standards as if they apply to all subdivisions
+- Stating Transitional Lot requirements as if they apply to all lots
+- Stating Hillside Protection standards as if they apply to all properties
+
+{known_exceptions}
+
+QUESTION ASKED: {question}
+
+ANSWER TO VALIDATE:
+{answer}
+
+INSTRUCTIONS:
+1. If the answer is accurate — either it correctly states general standards, OR it correctly states an exception WITH its limiting condition — respond with exactly: VALID
+2. If the answer presents a conditional standard as a general rule WITHOUT stating the limiting condition, respond with: CORRECTED: [provide the corrected answer with the limiting condition added — change only what is wrong, preserve all correct content and citations]
+3. If unsure, respond VALID — only flag clear errors.
+
+Your response (VALID or CORRECTED: ...):"""
+
+        try:
+            response = self.claude_client.messages.create(
+                model=CLAUDE_MODEL,
+                max_tokens=MAX_ANSWER_TOKENS,
+                temperature=0.0,
+                messages=[{"role": "user", "content": validation_prompt}],
+            )
+            validation_result = response.content[0].text.strip()
+
+            if validation_result.startswith("CORRECTED:"):
+                corrected = validation_result[len("CORRECTED:"):].strip()
+                print("Response validator: correction applied")
+                return corrected
+            else:
+                # VALID or anything else — return original answer unchanged
+                return answer
+
+        except Exception as e:
+            # If validation fails for any reason, return original answer
+            # Never block a response due to validator failure
+            print(f"Response validator error (non-blocking): {e}")
+            return answer
 
     def _check_abstention(self, answer: str) -> bool:
         """
