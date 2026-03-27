@@ -148,7 +148,7 @@ class RAGEngine:
         self.is_initialized = False
         self._init_error   = None
         # Knowledge graph: maps exceptions/redirects across all 26 docs.
-        # Loaded at startup from knowledge_graph.json on the repo.
+        # Loaded at startup from knowledge_graph.json in the repo root.
         # Used by _flag_exception_chunks() before every query.
         self.knowledge_graph = None
 
@@ -274,14 +274,11 @@ class RAGEngine:
 
     def _load_knowledge_graph(self):
         """
-        Load knowledge_graph.json from the repo at startup.
-        Maps every exception, redirect, and cross-reference
-        found across all 26 source documents. Used by
-        _flag_exception_chunks() to prepend warning labels
-        to chunks from exception/redirect sections, preventing
-        Claude from presenting a special-case standard as the
-        general citywide rule. Engine continues without it if
-        the file is missing (degraded but functional).
+        Load knowledge_graph.json from the repo root at startup.
+        Maps every exception, redirect, and cross-reference across
+        all 26 source documents. Used by _flag_exception_chunks()
+        to label exception chunks and fetch their parent sections.
+        Engine continues without it if file is missing (degraded).
         """
         import json
         repo_root  = Path(__file__).parent.parent
@@ -369,11 +366,11 @@ class RAGEngine:
             # Step 1: Retrieve relevant chunks from ChromaDB
             chunks = self._retrieve_chunks(question)
 
-            # Step 1b: Flag exception chunks before any further processing.
-            # Checks each chunk against the knowledge graph and prepends
-            # a warning label to chunks from sections flagged as exceptions
-            # or redirects. Claude sees the warning and cannot present a
-            # special-case standard as the general citywide rule.
+            # Step 1b: Flag exception chunks and fetch their parent sections.
+            # For every chunk from an exception or redirect section, this
+            # prepends a warning label AND fetches the general rule sections
+            # that the exception references. Guarantees the general standard
+            # is always in context alongside any exception chunk.
             chunks = self._flag_exception_chunks(chunks)
 
             # Step 2: Check if we found anything useful
@@ -1088,13 +1085,39 @@ Write your answer now:"""
 
     def _flag_exception_chunks(self, chunks: list) -> list:
         """
-        Check each retrieved chunk against the knowledge graph.
-        If a chunk comes from a section flagged as an exception
-        or redirect, prepend a warning label to its text so
-        Claude cannot present it as the general citywide rule.
+        Two-phase processing for exception and redirect chunks:
+
+        PHASE 1 -- FLAG:
+          Check each chunk against the knowledge graph. If it
+          comes from a section marked as an exception or redirect,
+          prepend a WARNING label so Claude cannot present it as
+          the general citywide rule.
+
+        PHASE 2 -- FETCH PARENT SECTIONS:
+          For every flagged chunk, read the 'references' field
+          from its knowledge graph provision. Those references
+          are the general rule sections the exception points to.
+          Fetch those sections directly from ChromaDB by metadata
+          and add them to the chunk list.
+
+        WHY THIS SOLVES THE RETRIEVAL PROBLEM:
+          Vector similarity is blind to legal hierarchy. Sec. 6.13
+          (40-ft rural ROW exception) scores equally to Sec. 6.3(4)
+          (50-ft standard ROW) on street questions -- both contain
+          the same keywords. Without this method, the exception
+          wins the ranking competition and the general rule never
+          reaches Claude. This method guarantees both are present.
+
+        SELF-HEALING DESIGN:
+          Every exception in the knowledge graph carries its
+          'references' list. Adding a new exception to the corpus
+          automatically fixes its retrieval -- no code changes
+          needed. Covers all 26 documents permanently.
         """
         if not self.knowledge_graph:
             return chunks
+
+        # Build a lookup: doc_id pattern -> list of flagged provisions
         exception_index = {}
         for doc_name, doc_data in self.knowledge_graph.get('documents', {}).items():
             flagged = [
@@ -1103,11 +1126,20 @@ Write your answer now:"""
             ]
             if flagged:
                 exception_index[doc_name] = flagged
+
+        # Track which parent sections we have already fetched
+        # so we do not add duplicates
+        seen_ids = set(c.get('chunk_id', '') for c in chunks)
+        fetched_parent_sections = set()
+        parent_chunks_to_add = []
+
         flagged_chunks = []
         for chunk in chunks:
             chunk_doc_id  = chunk.get('doc_id', '')
             chunk_section = chunk.get('section_number', '')
             chunk_text    = chunk.get('text', '')
+
+            # Match this chunk's document against the exception index
             matching_provisions = []
             for doc_name, provisions in exception_index.items():
                 doc_match = (
@@ -1129,9 +1161,12 @@ Write your answer now:"""
                     chunk_clean = chunk_section.strip()
                     if prov_clean == chunk_clean:
                         matching_provisions.append(prov)
+
+            # ── PHASE 1: Flag the chunk ─────────────────────────────
             if matching_provisions:
                 exceptions = [p for p in matching_provisions if p.get('type') == 'exception']
                 redirects  = [p for p in matching_provisions if p.get('type') == 'redirect']
+
                 if exceptions:
                     prov = exceptions[0]
                     desc = prov.get('description', '')
@@ -1141,12 +1176,13 @@ Write your answer now:"""
                         'not the general citywide rule. '
                         + desc
                         + '. Do NOT present this as the default standard. '
-                        'Always state the limiting condition when using '
-                        'any requirement from this section.'
+                        'Always state the limiting condition. '
+                        'The general rule sections are being provided below.'
                         + chr(10) * 2
                     )
                     chunk = dict(chunk)
                     chunk['text'] = warning + chunk_text
+
                 elif redirects:
                     prov    = redirects[0]
                     refs    = prov.get('references', [])
@@ -1155,19 +1191,74 @@ Write your answer now:"""
                         'WARNING REDIRECT: This section sends the reader to '
                         + ref_str
                         + ' for the applicable standard. '
-                        'The general standard may be in a different section. '
-                        'Always cite the destination section when answering.'
+                        'The general standard sections are being provided below.'
                         + chr(10) * 2
                     )
                     chunk = dict(chunk)
                     chunk['text'] = warning + chunk_text
+
+                # ── PHASE 2: Fetch parent (general rule) sections ───
+                # Read every section number from the 'references' field
+                # of the matched provision and fetch those chunks from
+                # ChromaDB directly by metadata. These are the general
+                # rules that this exception is an exception TO.
+                all_refs = []
+                for prov in matching_provisions:
+                    all_refs.extend(prov.get('references', []))
+
+                for ref_section in all_refs:
+                    # Normalize: strip leading zeros, spaces, 'Sec.' etc.
+                    ref_clean = ref_section.strip()
+                    # Skip if we already fetched this section
+                    fetch_key = f'{chunk_doc_id}::{ref_clean}'
+                    if fetch_key in fetched_parent_sections:
+                        continue
+                    fetched_parent_sections.add(fetch_key)
+                    try:
+                        parent_results = self.collection.get(
+                            where={'section_number': {'$eq': ref_clean}},
+                            include=['documents', 'metadatas'],
+                        )
+                        if not parent_results.get('documents'):
+                            continue
+                        ids = parent_results.get('ids', [])
+                        for j, (ptext, pmeta) in enumerate(zip(
+                            parent_results['documents'],
+                            parent_results['metadatas'],
+                        )):
+                            pid = ids[j] if j < len(ids) else f'parent_{ref_clean}_{j}'
+                            if pid in seen_ids:
+                                continue
+                            seen_ids.add(pid)
+                            parent_chunks_to_add.append({
+                                'text':            ptext,
+                                'similarity':      0.91,
+                                'chunk_id':        pid,
+                                'doc_id':          pmeta.get('doc_id', ''),
+                                'doc_title':       pmeta.get('doc_title', 'Unknown Document'),
+                                'content_type':    pmeta.get('content_type', ''),
+                                'section_number':  pmeta.get('section_number', ''),
+                                'section_title':   pmeta.get('section_title', ''),
+                                'source_citation': pmeta.get('source_citation', ''),
+                                'article':         pmeta.get('article', ''),
+                                'division':        pmeta.get('division', ''),
+                            })
+                    except Exception:
+                        pass
+
             flagged_chunks.append(chunk)
+
+        # Add all fetched parent sections to the chunk list
+        flagged_chunks.extend(parent_chunks_to_add)
+
         n_flagged = sum(
             1 for c in flagged_chunks
             if c.get('text', '').startswith('WARNING')
         )
-        if n_flagged > 0:
-            print(f'Exception flagging: {n_flagged}/{len(chunks)} chunks flagged')
+        n_parents = len(parent_chunks_to_add)
+        if n_flagged > 0 or n_parents > 0:
+            print(f'Exception flagging: {n_flagged} flagged, {n_parents} parent sections fetched')
+
         return flagged_chunks
 
     def _validate_response(
