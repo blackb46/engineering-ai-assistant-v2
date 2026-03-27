@@ -388,13 +388,10 @@ class RAGEngine:
                 question, chunks, citations, discrepancy_flag
             )
 
-            # Step 5b: Validate the answer for exception/rule confusion.
-            # Runs a second Claude call to check whether the answer
-            # incorrectly presents a conditional standard as the general
-            # rule. If a problem is detected, a corrected version is
-            # returned. The user never sees an uncorrected answer.
-            if discrepancy_flag != "claude_will_decide":
-                raw_answer = self._validate_response(question, raw_answer)
+            # Step 5b: Response validator -- disabled for performance.
+            # Uncomment to re-enable second Claude call for exception checking.
+            # if discrepancy_flag != "claude_will_decide":
+            #     raw_answer = self._validate_response(question, raw_answer)
 
             # Step 6: Parse discrepancy signal Claude embedded in answer
             if discrepancy_flag == "claude_will_decide":
@@ -1224,12 +1221,9 @@ Write your answer now:"""
         answer: str,
     ) -> str:
         """
-        Run a second Claude call to validate the generated answer
-        before it is shown to the user. Checks whether the answer
-        presents a conditional or exception standard as the general
-        citywide rule without stating the limiting condition.
-        Returns corrected version if problem detected, otherwise
-        returns original answer unchanged.
+        Run a second Claude call to validate the generated answer.
+        Currently disabled for performance. Re-enable in Patch 6
+        by uncommenting the _validate_response call.
         """
         known_exceptions = (
             'Known conditional/exception provisions in Brentwood code:\n'
