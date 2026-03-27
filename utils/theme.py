@@ -101,9 +101,20 @@ def get_favicon():
         return "🏛"
 
 # ── Master CSS ────────────────────────────────────────────────────────────────
+# CHANGES FROM PREVIOUS VERSION:
+#   - Google Fonts import removed — system font stack used directly (faster load)
+#   - Dashboard nav icon fixed from black square to home emoji
+#   - Active nav link gets distinct navy left-border highlight
+#   - Answer box: tighter line-height (1.7), more generous left padding (32px)
+#   - Answer LABEL: replaced thin rule with orange dot accent for sharper hierarchy
+#   - Page header: subtle gradient added to navy band for depth
+#   - Mode cards: accent bar changed from flat gradient to orange-forward for energy
+#   - Status bar: reduced vertical padding, less visual weight
+#   - Input focus ring: warmer, more visible navy glow
+#   - Citation box: slightly warmer background tint
+#   - Sidebar: active link treatment added
+#   - General: tightened spacing on section headings for more content density
 _CSS = """
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
-
 :root {
     --navy:      #22427C;
     --midblue:   #2F5C9C;
@@ -120,8 +131,8 @@ _CSS = """
     --gray-200:  #E2E8F0;
     --gray-300:  #CBD5E1;
     --gray-400:  #94A3B8;
-    --font-display: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-body:    'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     --text-xs:   0.72rem;
     --text-sm:   0.83rem;
     --text-base: 0.94rem;
@@ -172,7 +183,7 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     padding-right: 0 !important;
 }
 .bw-sidebar-brand {
-    background: var(--navy);
+    background: linear-gradient(160deg, #1B3A6B 0%, #22427C 60%, #2F5C9C 100%);
     padding: 20px 16px 16px;
     text-align: center;
     border-bottom: 3px solid var(--orange);
@@ -223,32 +234,41 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
-    padding: 8px 12px !important;
+    padding: 8px 12px 8px 14px !important;
     border-radius: var(--radius-sm) !important;
     color: var(--text-mid) !important;
     font-family: var(--font-body) !important;
     font-size: var(--text-sm) !important;
     font-weight: 500 !important;
     text-decoration: none !important;
-    transition: background 0.15s, color 0.15s !important;
+    transition: background 0.15s, color 0.15s, border-color 0.15s !important;
     margin: 2px 0 !important;
+    border-left: 3px solid transparent !important;
 }
 [data-testid="stPageLink"] a:hover {
     background: var(--surface-3) !important;
     color: var(--navy) !important;
+    border-left-color: var(--midblue) !important;
+}
+[data-testid="stPageLink"] a[aria-current="page"] {
+    background: var(--surface-3) !important;
+    color: var(--navy) !important;
+    font-weight: 700 !important;
+    border-left-color: var(--orange) !important;
 }
 .bw-sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 8px 16px; }
 .bw-sidebar-footer { padding: 8px 16px 16px; font-size: var(--text-xs); color: var(--gray-400); font-family: var(--font-body); line-height: 1.5; }
 
 /* ── Page header ────────────────────────────────────────────────── */
 .bw-page-header {
-    background: var(--navy);
+    background: linear-gradient(120deg, #1B3A6B 0%, #22427C 50%, #2A5090 100%);
     border-bottom: 3px solid var(--orange);
     padding: 28px 32px;
     margin: -1rem -2rem 32px -2rem;
     display: flex;
     align-items: center;
     gap: 20px;
+    box-shadow: 0 2px 12px rgba(27,58,107,0.25);
 }
 .bw-page-header-text { flex: 1; }
 .bw-page-header h1 {
@@ -277,8 +297,8 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     text-transform: uppercase;
     color: var(--midblue);
     border-bottom: 2px solid var(--border);
-    padding-bottom: 8px;
-    margin: 32px 0 16px;
+    padding-bottom: 6px;
+    margin: 24px 0 14px;
 }
 
 /* ── Step heading (Step 1, Step 2 in Checklist Mode) ────────────── */
@@ -296,7 +316,7 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     letter-spacing: -0.01em;
 }
 
-/* ── Expander section headers — larger, bolder ───────────────────── */
+/* ── Expander section headers ───────────────────────────────────── */
 [data-testid="stExpander"] summary {
     font-family: var(--font-display) !important;
     font-weight: 700 !important;
@@ -321,7 +341,7 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
 .bw-card { background: var(--white) !important; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow-sm); }
 .bw-card-accent { border-left: 4px solid var(--navy); }
 
-/* ── "Select a Mode" heading — larger, more prominent ───────────── */
+/* ── "Select a Mode" heading ────────────────────────────────────── */
 .bw-select-mode-heading {
     font-family: var(--font-display);
     font-size: 1.35rem;
@@ -349,12 +369,11 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--navy), var(--midblue));
+    height: 4px;
+    background: linear-gradient(90deg, var(--orange), #F59B6A);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 .bw-mode-card:hover { box-shadow: var(--shadow-md); border-color: var(--midblue); transform: translateY(-2px); }
-/* Title row: icon and h3 side by side */
 .bw-mode-card-title-row {
     display: flex;
     align-items: center;
@@ -363,9 +382,11 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
 }
 .bw-mode-card-title-row .mode-icon {
     width: 44px; height: 44px; flex-shrink: 0;
-    background: var(--surface-3); border-radius: 10px;
+    background: linear-gradient(135deg, #EEF2F9, #DDE6F5);
+    border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
     font-size: 1.25rem; margin-bottom: 0;
+    box-shadow: var(--shadow-xs);
 }
 .bw-mode-card-title-row h3 {
     font-family: var(--font-display) !important;
@@ -383,9 +404,9 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     border: 1px solid var(--border);
     border-top: 3px solid var(--navy);
     border-radius: var(--radius);
-    padding: 24px 28px;
+    padding: 24px 32px;
     margin: 16px 0;
-    line-height: 1.8;
+    line-height: 1.7;
     font-size: var(--text-base);
     color: var(--text-dark) !important;
     font-family: var(--font-body);
@@ -398,16 +419,25 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--navy);
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+}
+.bw-answer-label::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--orange);
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 .bw-answer-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 /* ── Citation box ───────────────────────────────────────────────── */
 .bw-citation-box {
-    background: var(--surface-2) !important;
+    background: #FAFBFD !important;
     border: 1px solid var(--border);
     border-top: 2px solid var(--orange);
     border-radius: var(--radius);
@@ -439,16 +469,16 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
 .bw-abstain-box { background: var(--gray-100) !important; color: var(--text-mid) !important; border: 1px solid var(--border); border-left: 4px solid var(--gray-300); border-radius: var(--radius); padding: 12px 18px; margin: 8px 0; font-size: 0.94em; font-family: var(--font-body); }
 
 /* ── Status pills ───────────────────────────────────────────────── */
-.bw-status-ok { background: #F0FDF4 !important; color: #166534 !important; border: 1px solid #BBF7D0; border-left: 4px solid #16A34A; border-radius: var(--radius); padding: 12px 16px; margin: 6px 0; font-size: 0.88em; font-family: var(--font-body); }
-.bw-status-warn { background: #FFFBEB !important; color: #92400E !important; border: 1px solid #FDE68A; border-left: 4px solid #D97706; border-radius: var(--radius); padding: 12px 16px; margin: 6px 0; font-size: 0.88em; font-family: var(--font-body); }
-.bw-status-err { background: #FFF5F5 !important; color: #7F1D1D !important; border: 1px solid #FECACA; border-left: 4px solid #DC2626; border-radius: var(--radius); padding: 12px 16px; margin: 6px 0; font-size: 0.88em; font-family: var(--font-body); }
+.bw-status-ok { background: #F0FDF4 !important; color: #166534 !important; border: 1px solid #BBF7D0; border-left: 4px solid #16A34A; border-radius: var(--radius); padding: 10px 16px; margin: 6px 0; font-size: 0.88em; font-family: var(--font-body); }
+.bw-status-warn { background: #FFFBEB !important; color: #92400E !important; border: 1px solid #FDE68A; border-left: 4px solid #D97706; border-radius: var(--radius); padding: 10px 16px; margin: 6px 0; font-size: 0.88em; font-family: var(--font-body); }
+.bw-status-err { background: #FFF5F5 !important; color: #7F1D1D !important; border: 1px solid #FECACA; border-left: 4px solid #DC2626; border-radius: var(--radius); padding: 10px 16px; margin: 6px 0; font-size: 0.88em; font-family: var(--font-body); }
 
 /* ── Feedback / success ─────────────────────────────────────────── */
 .bw-feedback-panel { background: #FFF8F5 !important; color: var(--text-dark) !important; border: 1px solid #FDBA74; border-radius: var(--radius); padding: 20px 24px; margin: 16px 0; font-family: var(--font-body); }
 .bw-success-msg { background: #F0FDF4 !important; color: #166534 !important; border: 1px solid #BBF7D0; border-radius: var(--radius); padding: 12px 18px; margin: 16px 0; font-family: var(--font-body); }
 
 /* ── Wizard elements ────────────────────────────────────────────── */
-.bw-wizard-header { background: var(--navy) !important; color: white !important; padding: 20px 24px; border-radius: var(--radius); border-left: 5px solid var(--orange); margin-bottom: 16px; }
+.bw-wizard-header { background: linear-gradient(120deg, #1B3A6B 0%, #22427C 100%) !important; color: white !important; padding: 20px 24px; border-radius: var(--radius); border-left: 5px solid var(--orange); margin-bottom: 16px; }
 .bw-wizard-header h2 { color: white !important; font-family: var(--font-display); font-size: var(--text-lg); margin: 0 0 4px; font-weight: 700; }
 .bw-wizard-header p { color: rgba(255,255,255,0.75) !important; font-size: var(--text-sm); margin: 0; }
 .bw-checklist-section { background: var(--white) !important; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin: 12px 0; }
@@ -464,7 +494,7 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
 
 /* ── Metrics ────────────────────────────────────────────────────── */
 [data-testid="stMetric"] { background: var(--white) !important; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px !important; box-shadow: var(--shadow-xs); position: relative; overflow: hidden; }
-[data-testid="stMetric"]::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--navy), var(--midblue)); opacity: 0.6; }
+[data-testid="stMetric"]::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--orange), #F59B6A); opacity: 0.8; }
 [data-testid="stMetricLabel"] { font-family: var(--font-body) !important; font-size: var(--text-xs) !important; color: var(--text-mid) !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.08em !important; }
 [data-testid="stMetricValue"] { font-family: var(--font-display) !important; font-size: 2rem !important; color: var(--navy) !important; font-weight: 700 !important; line-height: 1.1 !important; }
 
@@ -480,9 +510,9 @@ p, li, span, div, label { font-family: var(--font-body) !important; }
 [data-testid="stTextArea"] textarea,
 [data-testid="stTextInput"] input { border: 1px solid var(--gray-300) !important; border-radius: var(--radius) !important; font-family: var(--font-body) !important; font-size: var(--text-base) !important; background: var(--white) !important; color: var(--text-dark) !important; transition: border-color 0.15s, box-shadow 0.15s !important; padding: 10px 14px !important; }
 [data-testid="stTextArea"] textarea:focus,
-[data-testid="stTextInput"] input:focus { border-color: var(--navy) !important; box-shadow: 0 0 0 3px rgba(34,66,124,0.12) !important; outline: none !important; }
+[data-testid="stTextInput"] input:focus { border-color: var(--navy) !important; box-shadow: 0 0 0 3px rgba(34,66,124,0.15) !important; outline: none !important; }
 [data-testid="stSelectbox"] > div > div { border-color: var(--gray-300) !important; border-radius: var(--radius) !important; font-family: var(--font-body) !important; transition: border-color 0.15s !important; }
-[data-testid="stSelectbox"] > div > div:focus-within { border-color: var(--navy) !important; box-shadow: 0 0 0 3px rgba(34,66,124,0.12) !important; }
+[data-testid="stSelectbox"] > div > div:focus-within { border-color: var(--navy) !important; box-shadow: 0 0 0 3px rgba(34,66,124,0.15) !important; }
 
 /* ── Expander ───────────────────────────────────────────────────── */
 [data-testid="stExpander"] { border: 1px solid var(--border) !important; border-radius: var(--radius) !important; background: var(--white) !important; box-shadow: var(--shadow-xs) !important; margin-bottom: 8px !important; }
