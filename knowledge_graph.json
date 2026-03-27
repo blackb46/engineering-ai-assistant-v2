@@ -1339,35 +1339,45 @@
           "section": "6.12",
           "description": "OSRD-IP \u2014 special standards, NOT the general standard",
           "text": "Special land use regulations have been enacted to guide innovative projects within the OSRD zoning district to encourage a wider range of housing options for the community and greater preservation of open space, while at the same time maintaining the fundamental density standard of one dwelling unit per acre. This section provides special standards for OSRD-IP developments, which shall supersede t",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "exception",
           "section": "6.12",
           "description": "OSRD-IP \u2014 special standards, NOT the general standard",
           "text": "d. \u2003Sidewalks, bikeways, and multi-use trails are an integral part of the OSRD-IP design. To the greatest extent possible, sidewalks and multi-use trails should connect to adjacent neighborhoods, schools, civic uses, and commercial areas.",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "exception",
           "section": "6.12",
           "description": "OSRD-IP \u2014 special standards, NOT the general standard",
           "text": "(2) \u2003Street Hierarchy. Streets within an OSRD-IP zoning district shall be classified according to the following standards. (Refer to the standard drawings contained within Appendix Two of these Regulations.)",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "exception",
           "section": "6.12",
           "description": "OSRD-IP \u2014 special standards, NOT the general standard",
           "text": "2. \u2003The IP collector street is a low-speed public street intended to provide the primary access between streets within an OSRD-IP development, and the city's arterial and collector street system. Frontage for lots may be provided by an IP collector.",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "exception",
           "section": "6.12",
           "description": "Alternative standard used in place of the general rule",
           "text": "4. \u2003The IP collector may be constructed without lot frontage. Where lot frontage is not provided, the Planning Commission may allow an alternate cross-section for the IP collector which consists of a two-lane street with bike lanes on each side, and ADA compliant sidewalks on both sides of the street. The sidewalks shall be separated from the street by an 8-foot-wide planting strip. When lot front",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "redirect",
@@ -1383,14 +1393,18 @@
           "section": "6.12",
           "description": "Alternative standard used in place of the general rule",
           "text": "2. \u2003In lieu of sidewalks, the Planning Commission may approve a multi-use trail to provide pedestrian connectivity.",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "exception",
           "section": "6.13",
           "description": "Explicitly limited in application to specific condition",
           "text": "(2) \u2003Street Standards. The special rural street construction standard is limited in application to local streets only. This street type shall not be applied to collector or arterial streets, or to streets affording connectivity between adjoining subdivisions or developments. Local streets constructed under this standards shall meet the following technical standards:",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "cross_reference",
@@ -1406,7 +1420,9 @@
           "section": "6.13",
           "description": "Historic Rural Development \u2014 special standards, NOT the general standard",
           "text": "d. \u2003Sidewalks. No sidewalks are required within subdivisions using the Historic Rural Development standards.",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "exception",
@@ -1422,7 +1438,9 @@
           "section": "6.13",
           "description": "Transitional Lot \u2014 special standards, NOT general lot standards",
           "text": "(3) \u2003Lots with Steep Topography. Lots containing existing ground slopes of fifteen percent (15%) or greater, anywhere on the lot shall be designated as a \"transitional lot.\" No residence shall be built on a transitional lot without a detailed site plan prepared by a professional engineer or landscape architect licensed by the State of Tennessee (also refer to the Brentwood Zoning Ordinance for add",
-          "references": []
+          "references": [
+            "6.3"
+          ]
         },
         {
           "type": "cross_reference",
