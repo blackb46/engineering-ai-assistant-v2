@@ -540,7 +540,7 @@ def render_sidebar(active: str = "home"):
             unsafe_allow_html=True,
         )
         st.markdown("<span class='bw-nav-section-label'>Navigation</span>", unsafe_allow_html=True)
-        _nav_link("app.py",                 "Dashboard",      active == "home",   "⬛")
+        _nav_link("app.py",                 "Dashboard",      active == "home",   "🏠")
         _nav_link("pages/1_QA_Mode.py",     "Chatbot Mode",   active == "qa",     "🔍")
         _nav_link("pages/2_Wizard_Mode.py", "Checklist Mode", active == "wizard", "📋")
         st.markdown(
