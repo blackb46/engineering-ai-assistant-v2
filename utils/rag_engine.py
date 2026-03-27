@@ -412,6 +412,13 @@ class RAGEngine:
 
             elapsed = round(time.time() - start_time, 2)
 
+            # Step 8: Enforce bullet formatting on final answer.
+            # Programmatically converts inline bullet runs and
+            # numbered lists to proper line-per-item bullets,
+            # guaranteeing consistent display regardless of how
+            # Claude chose to format the response.
+            raw_answer = self._enforce_bullet_formatting(raw_answer)
+
             return {
                 "answer":            raw_answer,
                 "citations":         citations,
@@ -1087,39 +1094,13 @@ Write your answer now:"""
 
     def _flag_exception_chunks(self, chunks: list) -> list:
         """
-        Two-phase processing for exception and redirect chunks:
-
-        PHASE 1 -- FLAG:
-          Check each chunk against the knowledge graph. If it
-          comes from a section marked as an exception or redirect,
-          prepend a WARNING label so Claude cannot present it as
-          the general citywide rule.
-
-        PHASE 2 -- FETCH PARENT SECTIONS:
-          For every flagged chunk, read the 'references' field
-          from its knowledge graph provision. Those references
-          are the general rule sections the exception points to.
-          Fetch those sections directly from ChromaDB by metadata
-          and add them to the chunk list.
-
-        WHY THIS SOLVES THE RETRIEVAL PROBLEM:
-          Vector similarity is blind to legal hierarchy. Sec. 6.13
-          (40-ft rural ROW exception) scores equally to Sec. 6.3(4)
-          (50-ft standard ROW) on street questions -- both contain
-          the same keywords. Without this method, the exception
-          wins the ranking competition and the general rule never
-          reaches Claude. This method guarantees both are present.
-
-        SELF-HEALING DESIGN:
-          Every exception in the knowledge graph carries its
-          'references' list. Adding a new exception to the corpus
-          automatically fixes its retrieval -- no code changes
-          needed. Covers all 26 documents permanently.
+        Two-phase processing for exception and redirect chunks.
+        Phase 1: prepend WARNING label to exception/redirect chunks.
+        Phase 2: fetch parent (general rule) sections from ChromaDB
+        using the references field from the knowledge graph provision.
         """
         if not self.knowledge_graph:
             return chunks
-
-        # Build a lookup: doc_id pattern -> list of flagged provisions
         exception_index = {}
         for doc_name, doc_data in self.knowledge_graph.get('documents', {}).items():
             flagged = [
@@ -1128,20 +1109,14 @@ Write your answer now:"""
             ]
             if flagged:
                 exception_index[doc_name] = flagged
-
-        # Track which parent sections we have already fetched
-        # so we do not add duplicates
         seen_ids = set(c.get('chunk_id', '') for c in chunks)
         fetched_parent_sections = set()
         parent_chunks_to_add = []
-
         flagged_chunks = []
         for chunk in chunks:
             chunk_doc_id  = chunk.get('doc_id', '')
             chunk_section = chunk.get('section_number', '')
             chunk_text    = chunk.get('text', '')
-
-            # Match this chunk's document against the exception index
             matching_provisions = []
             for doc_name, provisions in exception_index.items():
                 doc_match = (
@@ -1163,12 +1138,9 @@ Write your answer now:"""
                     chunk_clean = chunk_section.strip()
                     if prov_clean == chunk_clean:
                         matching_provisions.append(prov)
-
-            # ── PHASE 1: Flag the chunk ─────────────────────────────
             if matching_provisions:
                 exceptions = [p for p in matching_provisions if p.get('type') == 'exception']
                 redirects  = [p for p in matching_provisions if p.get('type') == 'redirect']
-
                 if exceptions:
                     prov = exceptions[0]
                     desc = prov.get('description', '')
@@ -1184,7 +1156,6 @@ Write your answer now:"""
                     )
                     chunk = dict(chunk)
                     chunk['text'] = warning + chunk_text
-
                 elif redirects:
                     prov    = redirects[0]
                     refs    = prov.get('references', [])
@@ -1198,20 +1169,11 @@ Write your answer now:"""
                     )
                     chunk = dict(chunk)
                     chunk['text'] = warning + chunk_text
-
-                # ── PHASE 2: Fetch parent (general rule) sections ───
-                # Read every section number from the 'references' field
-                # of the matched provision and fetch those chunks from
-                # ChromaDB directly by metadata. These are the general
-                # rules that this exception is an exception TO.
                 all_refs = []
                 for prov in matching_provisions:
                     all_refs.extend(prov.get('references', []))
-
                 for ref_section in all_refs:
-                    # Normalize: strip leading zeros, spaces, 'Sec.' etc.
                     ref_clean = ref_section.strip()
-                    # Skip if we already fetched this section
                     fetch_key = f'{chunk_doc_id}::{ref_clean}'
                     if fetch_key in fetched_parent_sections:
                         continue
@@ -1247,12 +1209,8 @@ Write your answer now:"""
                             })
                     except Exception:
                         pass
-
             flagged_chunks.append(chunk)
-
-        # Add all fetched parent sections to the chunk list
         flagged_chunks.extend(parent_chunks_to_add)
-
         n_flagged = sum(
             1 for c in flagged_chunks
             if c.get('text', '').startswith('WARNING')
@@ -1260,7 +1218,6 @@ Write your answer now:"""
         n_parents = len(parent_chunks_to_add)
         if n_flagged > 0 or n_parents > 0:
             print(f'Exception flagging: {n_flagged} flagged, {n_parents} parent sections fetched')
-
         return flagged_chunks
 
     def _validate_response(
@@ -1335,6 +1292,53 @@ Write your answer now:"""
         except Exception as e:
             print(f'Response validator error (non-blocking): {e}')
             return answer
+
+    def _enforce_bullet_formatting(self, answer: str) -> str:
+        """
+        Post-process the answer to enforce consistent bullet formatting.
+        Converts two common patterns into proper line-per-item bullets:
+          1. Inline bullets: 'intro text • item1 • item2 • item3'
+             where 3+ items are crammed onto one line.
+          2. Inline numbered items: '(1) item1 (2) item2 (3) item3'
+             where 3+ numbered items appear on one line.
+        Lines that already have proper line breaks are left untouched.
+        """
+        import re
+        lines = answer.split('\n')
+        result = []
+        for line in lines:
+            # Pattern 1: inline bullet separator ' • ' with 3+ items
+            if line.count(' • ') >= 2:
+                parts = [p.strip() for p in line.split(' • ') if p.strip()]
+                if len(parts) >= 3:
+                    # First part is the intro sentence, rest are list items
+                    # If first part looks like an intro (no leading bullet)
+                    # keep it as prose then list the rest as bullets
+                    first = parts[0]
+                    rest  = parts[1:]
+                    # Check if first part is itself a list item or an intro
+                    is_intro = not re.match(r'^\(\d+\)', first)
+                    if is_intro and len(rest) >= 2:
+                        result.append(first)
+                        for part in rest:
+                            result.append('- ' + part)
+                    else:
+                        for part in parts:
+                            result.append('- ' + part)
+                    continue
+            # Pattern 2: inline numbered items (1) ... (2) ... (3) ...
+            # Only trigger when 3+ numbered items appear on the same line
+            numbered_matches = re.findall(r'(?:^|(?<=\s))\(\d+\)', line)
+            if len(numbered_matches) >= 3:
+                # Split on the numbered item markers
+                items = re.split(r'(?=(?:^|\s)\(\d+\))', line)
+                items = [i.strip() for i in items if i.strip()]
+                if len(items) >= 3:
+                    for item in items:
+                        result.append('- ' + item)
+                    continue
+            result.append(line)
+        return '\n'.join(result)
 
     def _check_abstention(self, answer: str) -> bool:
         """
