@@ -413,10 +413,8 @@ class RAGEngine:
             elapsed = round(time.time() - start_time, 2)
 
             # Step 8: Enforce bullet formatting on final answer.
-            # Programmatically converts inline bullet runs and
-            # numbered lists to proper line-per-item bullets,
-            # guaranteeing consistent display regardless of how
-            # Claude chose to format the response.
+            # Splits any line where Claude crammed multiple bullet
+            # items together using the unicode bullet character.
             raw_answer = self._enforce_bullet_formatting(raw_answer)
 
             return {
@@ -1295,49 +1293,25 @@ Write your answer now:"""
 
     def _enforce_bullet_formatting(self, answer: str) -> str:
         """
-        Post-process the answer to enforce consistent bullet formatting.
-        Converts two common patterns into proper line-per-item bullets:
-          1. Inline bullets: 'intro text • item1 • item2 • item3'
-             where 3+ items are crammed onto one line.
-          2. Inline numbered items: '(1) item1 (2) item2 (3) item3'
-             where 3+ numbered items appear on one line.
-        Lines that already have proper line breaks are left untouched.
+        Post-process answer to enforce one bullet item per line.
+        Claude often writes list items separated by the unicode
+        bullet character (u2022) all on one line like:
+          'intro text' + chr(0x2022) + '(1) item' + chr(0x2022) + '(2) item'
+        This method splits any such line into one item per line.
+        Lines that already have proper line breaks are untouched.
         """
-        import re
-        lines = answer.split('\n')
+        BULLET = chr(0x2022)
+        lines  = answer.split('\n')
         result = []
         for line in lines:
-            # Pattern 1: inline bullet separator ' • ' with 3+ items
-            if line.count(' • ') >= 2:
-                parts = [p.strip() for p in line.split(' • ') if p.strip()]
-                if len(parts) >= 3:
-                    # First part is the intro sentence, rest are list items
-                    # If first part looks like an intro (no leading bullet)
-                    # keep it as prose then list the rest as bullets
-                    first = parts[0]
-                    rest  = parts[1:]
-                    # Check if first part is itself a list item or an intro
-                    is_intro = not re.match(r'^\(\d+\)', first)
-                    if is_intro and len(rest) >= 2:
-                        result.append(first)
-                        for part in rest:
-                            result.append('- ' + part)
-                    else:
-                        for part in parts:
-                            result.append('- ' + part)
-                    continue
-            # Pattern 2: inline numbered items (1) ... (2) ... (3) ...
-            # Only trigger when 3+ numbered items appear on the same line
-            numbered_matches = re.findall(r'(?:^|(?<=\s))\(\d+\)', line)
-            if len(numbered_matches) >= 3:
-                # Split on the numbered item markers
-                items = re.split(r'(?=(?:^|\s)\(\d+\))', line)
-                items = [i.strip() for i in items if i.strip()]
-                if len(items) >= 3:
-                    for item in items:
-                        result.append('- ' + item)
-                    continue
-            result.append(line)
+            # If a line contains 2 or more bullet characters,
+            # split it on each bullet and put each piece on its own line.
+            if line.count(BULLET) >= 2:
+                parts = [p.strip() for p in line.split(BULLET) if p.strip()]
+                for part in parts:
+                    result.append('- ' + part)
+            else:
+                result.append(line)
         return '\n'.join(result)
 
     def _check_abstention(self, answer: str) -> bool:
