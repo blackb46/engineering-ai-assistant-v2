@@ -1295,17 +1295,14 @@ Write your answer now:"""
         """
         Post-process answer to enforce one bullet item per line.
         Claude often writes list items separated by the unicode
-        bullet character (u2022) all on one line like:
-          'intro text' + chr(0x2022) + '(1) item' + chr(0x2022) + '(2) item'
-        This method splits any such line into one item per line.
+        bullet character (u2022) all on one line. This method
+        splits any such line into one item per line.
         Lines that already have proper line breaks are untouched.
         """
         BULLET = chr(0x2022)
         lines  = answer.split('\n')
         result = []
         for line in lines:
-            # If a line contains 2 or more bullet characters,
-            # split it on each bullet and put each piece on its own line.
             if line.count(BULLET) >= 2:
                 parts = [p.strip() for p in line.split(BULLET) if p.strip()]
                 for part in parts:
