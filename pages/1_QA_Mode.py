@@ -70,10 +70,42 @@ def _display_answer(result: dict):
         </div>
         """, unsafe_allow_html=True)
     else:
+        def _to_html(text):
+            """Convert markdown bullet lines to HTML list items for display
+            inside an HTML div. Plain newlines are collapsed by HTML so
+            we must use <ul><li> tags to get one item per line."""
+            lines   = text.split('\n')
+            output  = []
+            in_list = False
+            for line in lines:
+                stripped  = line.strip()
+                is_bullet = stripped.startswith('- ') or stripped.startswith('* ')
+                if is_bullet:
+                    if not in_list:
+                        output.append(
+                            '<ul style="margin:0.4em 0 0.4em 1.2em;padding:0">'
+                        )
+                        in_list = True
+                    output.append(
+                        f'<li style="margin-bottom:0.25em">{stripped[2:]}</li>'
+                    )
+                else:
+                    if in_list:
+                        output.append('</ul>')
+                        in_list = False
+                    if stripped:
+                        output.append(f'<p style="margin:0.4em 0">{stripped}</p>')
+                    else:
+                        output.append('<br>')
+            if in_list:
+                output.append('</ul>')
+            return '\n'.join(output)
+
+        answer_html = _to_html(answer)
         st.markdown(f"""
         <div class="bw-answer-box">
             <span class="bw-answer-label">Answer</span>
-            {answer}
+            {answer_html}
         </div>
         """, unsafe_allow_html=True)
 
