@@ -570,10 +570,11 @@ def render_sidebar(active: str = "home"):
             unsafe_allow_html=True,
         )
         st.markdown("<span class='bw-nav-section-label'>Navigation</span>", unsafe_allow_html=True)
-        _nav_link("app.py",                 "Dashboard",        active == "home",   "🏠")
-        _nav_link("pages/1_QA_Mode.py",     "MuniCode Chatbot",   active == "qa",     "🏛️")
-        _nav_link("pages/2_Wizard_Mode.py", "Checklist Mode",   active == "wizard", "📋")
-        _nav_link("pages/3_MUTCD_Chatbot.py", "MUTCD Chatbot",  active == "mutcd",  "🚦")
+        _nav_link("app.py",                    "Dashboard",            active == "home",   "🏠")
+        _nav_link("pages/1_QA_Mode.py",        "MuniCode Chatbot",     active == "qa",     "🏛️")
+        _nav_link("pages/2_Wizard_Mode.py",    "Checklist Mode",       active == "wizard", "📋")
+        _nav_link("pages/3_MUTCD_Chatbot.py",  "MUTCD Chatbot",        active == "mutcd",  "🚦")
+        _nav_link("pages/5_Traffic_Calming.py","Traffic Calming",      active == "tc",     "🚸")
         st.markdown(
             """<hr class="bw-sidebar-divider">
             <div class="bw-sidebar-footer">
