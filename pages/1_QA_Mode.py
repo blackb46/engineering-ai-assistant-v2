@@ -21,7 +21,7 @@ from theme         import apply_theme, render_sidebar, page_header, section_head
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Chatbot Mode — Brentwood Engineering AI",
+    page_title="Municipal Code Chatbot — Brentwood Engineering AI",
     page_icon=get_favicon(),
     layout="wide",
 )
@@ -153,7 +153,7 @@ def _display_citations(citations: list):
 
 def main():
     page_header(
-        title="Engineering Chatbot Mode",
+        title="Municipal Code Chatbot",
         subtitle="Answers grounded in the Brentwood Municipal Code and Engineering Policy Manual",
     )
 
