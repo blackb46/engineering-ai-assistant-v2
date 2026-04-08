@@ -71,7 +71,7 @@ if not db_info["success"]:
 st.markdown("<div class='bw-select-mode-heading'>Select a Mode</div>",
             unsafe_allow_html=True)
 
-col_qa, col_wiz, col_mutcd = st.columns(3, gap="large")
+col_qa, col_wiz, col_mutcd, col_tc = st.columns(4, gap="large")
 
 with col_qa:
     st.markdown("""
@@ -124,6 +124,23 @@ with col_mutcd:
     if st.button("Open MUTCD Chatbot →", key="mutcd_btn",
                  use_container_width=True, type="primary"):
         st.switch_page("pages/3_MUTCD_Chatbot.py")
+
+with col_tc:
+    st.markdown("""
+    <div class="bw-mode-card">
+        <div class="bw-mode-card-title-row">
+            <div class="mode-icon">🚸</div>
+            <h3>Traffic Calming</h3>
+        </div>
+        <p>Step-by-step application review for traffic calming and speed hump
+        requests. Covers eligibility, data collection, petitions, and Board
+        action per Resolution 2026-12.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+    if st.button("Open Traffic Calming →", key="tc_btn",
+                 use_container_width=True, type="primary"):
+        st.switch_page("pages/5_Traffic_Calming.py")
 
 
 # ── Quick start ───────────────────────────────────────────────────────────────
