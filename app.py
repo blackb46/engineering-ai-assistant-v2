@@ -71,14 +71,14 @@ if not db_info["success"]:
 st.markdown("<div class='bw-select-mode-heading'>Select a Mode</div>",
             unsafe_allow_html=True)
 
-col_qa, col_wiz = st.columns(2, gap="large")
+col_qa, col_wiz, col_mutcd = st.columns(3, gap="large")
 
 with col_qa:
     st.markdown("""
     <div class="bw-mode-card">
         <div class="bw-mode-card-title-row">
             <div class="mode-icon">🔍</div>
-            <h3>Chatbot Mode</h3>
+            <h3>Municipal Code Chatbot</h3>
         </div>
         <p>Ask natural language questions about engineering policy. Answers are
         grounded in the Municipal Code and Engineering Policy Manual with
@@ -86,7 +86,7 @@ with col_qa:
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-    if st.button("Open Chatbot Mode →", key="qa_btn",
+    if st.button("Open Municipal Code Chatbot →", key="qa_btn",
                  use_container_width=True, type="primary"):
         st.switch_page("pages/1_QA_Mode.py")
     if not engine_ready:
@@ -107,6 +107,23 @@ with col_wiz:
     if st.button("Open Checklist Mode →", key="wiz_btn",
                  use_container_width=True, type="primary"):
         st.switch_page("pages/2_Wizard_Mode.py")
+
+with col_mutcd:
+    st.markdown("""
+    <div class="bw-mode-card">
+        <div class="bw-mode-card-title-row">
+            <div class="mode-icon">🚦</div>
+            <h3>MUTCD Chatbot</h3>
+        </div>
+        <p>Ask questions about traffic control devices, signs, signals, markings,
+        and work zones. Answers are grounded in the MUTCD 11th Edition with
+        section-level citations.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+    if st.button("Open MUTCD Chatbot →", key="mutcd_btn",
+                 use_container_width=True, type="primary"):
+        st.switch_page("pages/3_MUTCD_Chatbot.py")
 
 
 # ── Quick start ───────────────────────────────────────────────────────────────
