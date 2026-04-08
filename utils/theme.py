@@ -554,7 +554,7 @@ def apply_theme():
 
 
 def render_sidebar(active: str = "home"):
-    """Render the branded sidebar. active = 'home' | 'qa' | 'wizard'"""
+    """Render the branded sidebar. active = 'home' | 'qa' | 'wizard' | 'mutcd'"""
     with st.sidebar:
         st.markdown(
             """
@@ -570,9 +570,10 @@ def render_sidebar(active: str = "home"):
             unsafe_allow_html=True,
         )
         st.markdown("<span class='bw-nav-section-label'>Navigation</span>", unsafe_allow_html=True)
-        _nav_link("app.py",                 "Dashboard",      active == "home",   "🏠")
-        _nav_link("pages/1_QA_Mode.py",     "Chatbot Mode",   active == "qa",     "🔍")
-        _nav_link("pages/2_Wizard_Mode.py", "Checklist Mode", active == "wizard", "📋")
+        _nav_link("app.py",                 "Dashboard",        active == "home",   "🏠")
+        _nav_link("pages/1_QA_Mode.py",     "Municipal Code Chatbot",   active == "qa",     "🔍")
+        _nav_link("pages/2_Wizard_Mode.py", "Checklist Mode",   active == "wizard", "📋")
+        _nav_link("pages/3_MUTCD_Chatbot.py", "MUTCD Chatbot",  active == "mutcd",  "🚦")
         st.markdown(
             """<hr class="bw-sidebar-divider">
             <div class="bw-sidebar-footer">
