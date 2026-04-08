@@ -33,25 +33,6 @@ from checklist_data import (
 from comments_database import COMMENTS, get_comment
 from theme import apply_theme, render_sidebar, page_header, section_heading, footer, get_favicon
 
-# ── Traffic Calming module (gracefully unavailable if files not yet uploaded) ──
-try:
-    from traffic_calming_data import (
-        ARTERIAL_STREETS,
-        COLLECTOR_STREETS,
-        STREET_CLASSIFICATIONS,
-        APPLICATION_TYPES,
-        TIER2_STRATEGIES,
-        SCORING_CRITERIA,
-        APPENDIX_SECTIONS,
-    )
-    from traffic_calming_report import (
-        build_traffic_calming_report,
-        build_appendix_document,
-    )
-    TC_AVAILABLE = True
-except ImportError:
-    TC_AVAILABLE = False
-
 try:
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
@@ -177,7 +158,7 @@ def initialize_session_state():
     if 'wizard_started' not in st.session_state:
         st.session_state.wizard_started = False
     if 'wizard_resubmittal' not in st.session_state:
-        st.session_state.wizard_resubmittal = "—"
+        st.session_state.wizard_resubmittal = "--"
 
 
 def reset_checklist():
@@ -185,7 +166,7 @@ def reset_checklist():
     st.session_state.wizard_checklist_state = {}
     st.session_state.wizard_selected_comments = {}
     st.session_state.wizard_custom_notes = {}
-    st.session_state.wizard_resubmittal = "—"
+    st.session_state.wizard_resubmittal = "--"
 
 
 def collect_all_comments():
@@ -719,7 +700,242 @@ def _render_checklist():
                 st.markdown("---")
 
 
-def _tc_init():
+def main():
+    """Main function for Wizard Mode"""
+    initialize_session_state()
+
+    page_header(
+        title="Engineering Checklist Mode",
+        subtitle="Interactive plan review checklist with automatic comment generation",
+    )
+
+    # =========================================================================
+    # STEP 1: PROJECT SETUP
+    # =========================================================================
+    st.markdown("<div class='bw-step-heading'>Step 1 -- Project Setup</div>", unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        review_type = st.selectbox(
+            "Review Type",
+            options=[""] + REVIEW_TYPES,
+            index=0 if not st.session_state.wizard_review_type else (
+                REVIEW_TYPES.index(st.session_state.wizard_review_type) + 1
+                if st.session_state.wizard_review_type in REVIEW_TYPES else 0
+            ),
+            key="review_type_select"
+        )
+
+        if review_type and review_type != st.session_state.wizard_review_type:
+            st.session_state.wizard_review_type = review_type
+            reset_checklist()
+            st.rerun()
+        elif review_type:
+            st.session_state.wizard_review_type = review_type
+
+    with col2:
+        permit_number = st.text_input(
+            "Permit Number",
+            value=st.session_state.wizard_permit_number,
+            placeholder="e.g., SW2024-001"
+        )
+        st.session_state.wizard_permit_number = permit_number
+
+    with col3:
+        address = st.text_input(
+            "Address",
+            value=st.session_state.wizard_address,
+            placeholder="e.g., 1808 Sonoma Trce"
+        )
+        st.session_state.wizard_address = address
+
+    with col4:
+        reviewer = st.selectbox(
+            "Reviewer",
+            options=[""] + REVIEWERS,
+            index=0 if not st.session_state.wizard_reviewer else REVIEWERS.index(st.session_state.wizard_reviewer) + 1
+        )
+        st.session_state.wizard_reviewer = reviewer if reviewer else None
+
+    if not st.session_state.wizard_review_type:
+        st.markdown('<div class="bw-status-warn">Select a review type above to begin the checklist.</div>', unsafe_allow_html=True)
+        return
+
+    # =========================================================================
+    # STEP 2: INTERACTIVE CHECKLIST
+    # =========================================================================
+    _render_checklist()
+
+    # =========================================================================
+    # STANDALONE RESUBMITTAL QUESTION
+    # =========================================================================
+    st.markdown('<div class="bw-resubmittal-box">', unsafe_allow_html=True)
+
+    resub_col1, resub_col2 = st.columns([3, 1])
+
+    with resub_col1:
+        st.markdown("**" + chr(0x1F4EC) + " Add standard resubmittal comment?**")
+        resub_text = COMMENTS.get("BB-0045", "")
+        if resub_text:
+            st.caption(f'BB-0045: "{resub_text}"')
+
+    with resub_col2:
+        resubmittal = st.radio(
+            "Resubmittal",
+            options=["--", "Yes", "N/A"],
+            index=["--", "Yes", "N/A"].index(st.session_state.wizard_resubmittal) if st.session_state.wizard_resubmittal in ["--", "Yes", "N/A"] else 0,
+            key="resubmittal_radio",
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        st.session_state.wizard_resubmittal = resubmittal
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # =========================================================================
+    # STEP 3: REVIEW SUMMARY & EXPORT
+    # =========================================================================
+    st.markdown("---")
+    st.markdown("<div class='bw-step-heading'>" + chr(0x1F4CA) + " Step 3 -- Review Summary &amp; Export</div>", unsafe_allow_html=True)
+
+    yes_count = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "Yes")
+    no_count  = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "No")
+    na_count  = sum(1 for v in st.session_state.wizard_checklist_state.values() if v == "N/A")
+
+    has_comments = no_count > 0 or st.session_state.wizard_resubmittal == "Yes"
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric(chr(0x2705) + " Compliant",    yes_count)
+    with col2: st.metric(chr(0x274C) + " Issues Found", no_count)
+    with col3: st.metric(chr(0x2796) + " N/A",          na_count)
+    with col4: st.metric(chr(0x1F4DD) + " Total Reviewed", yes_count + no_count + na_count)
+
+    st.markdown('<div class="bw-export-section">', unsafe_allow_html=True)
+    st.markdown("### " + chr(0x1F4E4) + " Export Review")
+
+    if not has_comments and (yes_count + na_count) > 0:
+        st.success(chr(0x2705) + " No issues found! All reviewed items are compliant.")
+    elif has_comments:
+        comment_parts = []
+        if no_count > 0:
+            comment_parts.append(f"{no_count} issue(s) found")
+        if st.session_state.wizard_resubmittal == "Yes":
+            comment_parts.append("resubmittal comment included")
+        st.warning(chr(0x26A0) + chr(0xFE0F) + " " + " + ".join(comment_parts) + ".")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if DOCX_AVAILABLE:
+            if st.button(chr(0x1F4C4) + " Generate Word Document", type="primary", use_container_width=True):
+                if not st.session_state.wizard_permit_number:
+                    st.error("Please enter a permit number before exporting.")
+                elif len(st.session_state.wizard_checklist_state) == 0:
+                    st.error("Please review at least one item before exporting.")
+                else:
+                    doc_buffer = generate_word_document()
+                    if doc_buffer:
+                        filename = f"Review_{st.session_state.wizard_permit_number}_{datetime.now(_CT).strftime('%Y%m%d')}.docx"
+                        st.download_button(
+                            label=chr(0x2B07) + chr(0xFE0F) + " Download Word Document",
+                            data=doc_buffer,
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            use_container_width=True
+                        )
+        else:
+            st.warning("python-docx not available. Install it to enable Word export.")
+
+    with col2:
+        if st.button(chr(0x1F5D1) + chr(0xFE0F) + " Clear Review", use_container_width=True):
+            reset_checklist()
+            st.session_state.wizard_permit_number = ""
+            st.session_state.wizard_address       = ""
+            st.session_state.wizard_reviewer      = None
+            st.rerun()
+
+    if has_comments:
+        st.markdown("#### " + chr(0x1F4CA) + " Extract Comments")
+        permit_num = st.session_state.wizard_permit_number or "review"
+        datestamp  = datetime.now(_CT).strftime('%Y%m%d')
+
+        col_e1, col_e2 = st.columns(2)
+
+        with col_e1:
+            lama_data = generate_lama_csv()
+            if lama_data:
+                st.download_button(
+                    label=chr(0x1F4E5) + " Create CSV File of Comments",
+                    data=lama_data,
+                    file_name=f"LAMA_Comments_{permit_num}_{datestamp}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    help="Single-column CSV for the LAMA Comment Uploader extension"
+                )
+
+        with col_e2:
+            bax_data = generate_bluebeam_bax()
+            if bax_data:
+                st.download_button(
+                    label=chr(0x1F4D0) + " Create Bluebeam Comments File",
+                    data=bax_data,
+                    file_name=f"Markups_{permit_num}_{datestamp}.bax",
+                    mime="application/octet-stream",
+                    use_container_width=True,
+                    help="Import into Bluebeam via Markup -> Import (.bax format with full styling)"
+                )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if has_comments:
+        st.markdown("---")
+        st.subheader(chr(0x1F4CB) + " Quick Copy - All Comments")
+        st.caption("Copy these comments directly into Bluebeam or your permit system:")
+
+        all_comments = []
+        checklist = get_checklist_for_review_type(st.session_state.wizard_review_type)
+        for section_id, section_data in checklist.items():
+            for item in section_data["items"]:
+                item_key = item["id"]
+                if st.session_state.wizard_checklist_state.get(item_key) == "No":
+                    selected    = st.session_state.wizard_selected_comments.get(item_key, [])
+                    custom_note = st.session_state.wizard_custom_notes.get(item_key, "")
+                    for comment_id in selected:
+                        comment_text = COMMENTS.get(comment_id, "")
+                        if comment_text:
+                            all_comments.append(f"[{comment_id}] {comment_text}")
+                    if custom_note.strip():
+                        all_comments.append(f"[CUSTOM] {custom_note}")
+
+        if st.session_state.wizard_resubmittal == "Yes":
+            resub_text = COMMENTS.get("BB-0045", "")
+            if resub_text:
+                all_comments.append(f"[BB-0045] {resub_text}")
+
+        if all_comments:
+            comments_text = "\n\n".join(f"{i+1}. {c}" for i, c in enumerate(all_comments))
+            st.text_area(
+                "All Comments",
+                value=comments_text,
+                height=300,
+                label_visibility="collapsed"
+            )
+
+    # Navigation
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button(chr(0x1F3E0) + " Home"):
+            st.switch_page("app.py")
+    with col2:
+        if st.button(chr(0x1F4AC) + " Municipal Code Chatbot"):
+            st.switch_page("pages/1_QA_Mode.py")
+
+
+if __name__ == "__main__":
+    main()
+    footer()
     """
     Initialize all tc_ session state keys before widgets render.
     Uses setdefault() throughout — this is the only safe initialization
