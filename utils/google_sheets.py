@@ -33,11 +33,12 @@ HOW AUTH WORKS:
     secrets for drive_loader.py. No new credentials needed.
 
 REQUIRED STREAMLIT SECRETS:
-    [gcp_service_account]   ← already present
-    GOOGLE_SHEET_ID = "..." ← already present from V1
+    [gcp_service_account]        <- already present
+    GOOGLE_SHEET_ID = "..."      <- already present from V1 (EPM/Code chatbot flags)
+    GOOGLE_SHEET_ID_MUTCD = "..." <- NEW in V2.1 (MUTCD chatbot flags — separate sheet)
 
 AUTHOR:  City of Brentwood Engineering Department AI Assistant Project
-VERSION: 2.0
+VERSION: 2.1 — added sheet_id_secret param and Source column for MUTCD integration
 """
 
 from datetime import datetime
@@ -62,7 +63,10 @@ SHEETS_SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# V2 column header row — written to row 1 if the sheet is empty
+# V2.1 column header row — written to row 1 if the sheet is empty.
+# Both the EPM sheet and the MUTCD sheet use this same layout.
+# The "Source" column distinguishes which chatbot generated the response,
+# which is useful when reviewing flags across both knowledge bases.
 SHEET_HEADERS = [
     "Timestamp",
     "Question",
@@ -70,6 +74,7 @@ SHEET_HEADERS = [
     "User Feedback",
     "Discrepancy Flag",   # V2
     "Abstained",          # V2
+    "Source",             # V2.1 — "Municipal Code" or "MUTCD"
     "Status",
 ]
 
@@ -81,12 +86,24 @@ MAX_CELL_CHARS = 5000
 # AUTH HELPER
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_worksheet() -> Optional[gspread.Worksheet]:
+def _get_worksheet(sheet_id_secret: str = "GOOGLE_SHEET_ID") -> Optional[gspread.Worksheet]:
     """
-    Connect to the Google Sheet and return the first worksheet.
+    Connect to a Google Sheet and return the first worksheet.
 
-    Uses the same gcp_service_account credentials as drive_loader.py
-    and google_sheets.py V1 — no new setup required.
+    Uses the same gcp_service_account credentials as drive_loader.py.
+
+    V2.1 ADDITION:
+        sheet_id_secret parameter allows callers to specify which secret
+        key holds the Sheet ID. This lets the EPM chatbot and MUTCD chatbot
+        write to separate sheets while sharing all other auth logic.
+
+        EPM chatbot:   _get_worksheet()                       -> uses GOOGLE_SHEET_ID
+        MUTCD chatbot: _get_worksheet("GOOGLE_SHEET_ID_MUTCD") -> uses separate sheet
+
+    ARGS:
+        sheet_id_secret: The name of the Streamlit secret that holds the
+                         Google Sheet ID. Defaults to "GOOGLE_SHEET_ID"
+                         for backward compatibility with existing callers.
 
     RETURNS:
         gspread.Worksheet if connection succeeds, None if it fails.
@@ -97,7 +114,7 @@ def _get_worksheet() -> Optional[gspread.Worksheet]:
             scopes=SHEETS_SCOPES,
         )
         client      = gspread.authorize(credentials)
-        sheet_id    = st.secrets["GOOGLE_SHEET_ID"]
+        sheet_id    = st.secrets[sheet_id_secret]
         spreadsheet = client.open_by_key(sheet_id)
         return spreadsheet.sheet1
 
@@ -155,20 +172,30 @@ def log_flagged_response(
     # V2 additions — optional so V1 callers still work unchanged
     discrepancy_flag: Optional[str]  = None,
     abstained:        bool = False,
+    # V2.1 additions — route to EPM sheet or MUTCD sheet
+    source:           str  = "Municipal Code",
+    sheet_id_secret:  str  = "GOOGLE_SHEET_ID",
 ) -> bool:
     """
     Append a flagged response to the Google Sheet review queue.
 
-    Called when an engineer submits the "👎 Needs Improvement" feedback form.
+    Called when an engineer submits the feedback form on any chatbot page.
 
-    V1 CALL (still works):
+    V1 CALL (still works — writes to EPM sheet):
         log_flagged_response(question, ai_response, user_feedback)
 
-    V2 CALL (full context):
+    V2 CALL (full context — EPM sheet):
         log_flagged_response(
             question, ai_response, user_feedback,
             discrepancy_flag="more_restrictive",
             abstained=False,
+        )
+
+    V2.1 CALL (MUTCD chatbot — writes to separate MUTCD sheet):
+        log_flagged_response(
+            question, ai_response, user_feedback,
+            source="MUTCD",
+            sheet_id_secret="GOOGLE_SHEET_ID_MUTCD",
         )
 
     ARGS:
@@ -177,11 +204,14 @@ def log_flagged_response(
         user_feedback:    Engineer's explanation of what was wrong (optional).
         discrepancy_flag: 'more_restrictive' | 'conflict' | None
         abstained:        True if the system declined to answer.
+        source:           Which chatbot: "Municipal Code" (default) or "MUTCD".
+        sheet_id_secret:  Streamlit secret key for the target Sheet ID.
+                          "GOOGLE_SHEET_ID" (default) or "GOOGLE_SHEET_ID_MUTCD".
 
     RETURNS:
         True if the row was written successfully, False if it failed.
     """
-    worksheet = _get_worksheet()
+    worksheet = _get_worksheet(sheet_id_secret)
     if worksheet is None:
         print("google_sheets.log_flagged_response: could not connect to sheet")
         return False
@@ -200,11 +230,12 @@ def log_flagged_response(
             user_feedback if user_feedback else "(No feedback provided)",
             disc_display,    # V2
             abst_display,    # V2
+            source,          # V2.1 — "Municipal Code" or "MUTCD"
             "Open",          # default review status
         ]
 
         worksheet.append_row(new_row, value_input_option="USER_ENTERED")
-        print(f"✅ Flagged response logged to Google Sheet at {timestamp}")
+        print(f"Flagged response logged to Google Sheet ({source}) at {timestamp}")
         return True
 
     except Exception as e:
