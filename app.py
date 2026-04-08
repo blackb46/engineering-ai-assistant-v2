@@ -77,7 +77,7 @@ with col_qa:
     st.markdown("""
     <div class="bw-mode-card">
         <div class="bw-mode-card-title-row">
-            <div class="mode-icon">🔍</div>
+            <div class="mode-icon">🏛️</div>
             <h3>Municipal Code Chatbot</h3>
         </div>
         <p>Ask natural language questions about engineering policy. Answers are
