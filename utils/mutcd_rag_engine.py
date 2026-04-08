@@ -446,18 +446,43 @@ class MUTCDRAGEngine:
                 "text":            text,
                 "similarity":      round(similarity, 4),
                 "chunk_id":        chunk_id,
-                # MUTCD metadata fields set by 01_build_extract.ipynb
-                "part":            meta.get("part", ""),
+                # Metadata field names match 02_build_ingest.ipynb build_metadata():
+                #   'section'  -> the MUTCD section code e.g. "2B.03"
+                #   'chapter'  -> the chapter code e.g. "2B"
+                #   'title'    -> the section title
+                # These are stored under these exact keys in ChromaDB.
+                "section_id":      meta.get("section", ""),
+                "section_title":   meta.get("title", ""),
                 "chapter":         meta.get("chapter", ""),
-                "section_id":      meta.get("section_id", ""),
-                "section_title":   meta.get("section_title", ""),
-                "doc_title":       meta.get("doc_title", "MUTCD 11th Edition"),
-                "source_citation": meta.get("source_citation", ""),
+                "doc_title":       "MUTCD 11th Edition",
+                "source_citation": self._format_citation_from_meta(meta),
             })
 
         # Sort by similarity, best first
         chunks.sort(key=lambda c: c["similarity"], reverse=True)
         return chunks
+
+    def _format_citation_from_meta(self, meta: dict) -> str:
+        """
+        Build a formatted citation string directly from ChromaDB metadata.
+        Called at retrieval time so every chunk carries its citation pre-built.
+
+        Metadata fields stored by 02_build_ingest.ipynb:
+            section  -> e.g. "2B.03"  (MUTCD section code)
+            chapter  -> e.g. "2B"     (chapter code)
+            title    -> e.g. "Stop Sign"
+
+        Output format:
+            "MUTCD 11th Edition, Section 2B.03 -- Stop Sign"
+        """
+        section = meta.get("section", "")
+        title   = meta.get("title", "")
+
+        if section and title:
+            return f"MUTCD 11th Edition, Section {section} -- {title}"
+        elif section:
+            return f"MUTCD 11th Edition, Section {section}"
+        return "MUTCD 11th Edition"
 
     # ── Citation Building ───────────────────────────────────────────────────
 
@@ -479,7 +504,7 @@ class MUTCDRAGEngine:
         citation_order = []
 
         for chunk in chunks:
-            # Use section_id (e.g. "2B_03") as the deduplication key
+            # Use section_id (e.g. "2B.03") as the deduplication key
             key = chunk["section_id"] or chunk["chunk_id"]
 
             if key not in seen_sections:
@@ -487,12 +512,11 @@ class MUTCDRAGEngine:
                     "number":          len(seen_sections) + 1,
                     "chunk_id":        chunk["chunk_id"],
                     "doc_title":       chunk["doc_title"],
-                    "part":            chunk["part"],
                     "chapter":         chunk["chapter"],
                     "section_id":      chunk["section_id"],
                     "section_title":   chunk["section_title"],
                     "source_citation": chunk["source_citation"],
-                    "formatted":       self._format_citation(chunk),
+                    "formatted":       chunk["source_citation"],
                     "similarity":      chunk["similarity"],
                 }
                 citation_order.append(key)
@@ -502,40 +526,6 @@ class MUTCDRAGEngine:
                     seen_sections[key]["similarity"] = chunk["similarity"]
 
         return [seen_sections[key] for key in citation_order]
-
-    def _format_citation(self, chunk: dict) -> str:
-        """
-        Format a MUTCD section citation for display.
-
-        Uses source_citation from metadata if available (set by ingest notebook).
-        Falls back to constructing from part/chapter/section fields.
-
-        EXAMPLE OUTPUT:
-            "MUTCD 11th Edition, Part 2B — Regulatory Signs,
-             Section 2B.03 — Stop Sign"
-        """
-        # Use pre-formatted citation from metadata if available
-        if chunk.get("source_citation"):
-            return chunk["source_citation"]
-
-        # Build from available fields
-        parts = ["MUTCD 11th Edition"]
-
-        chapter = chunk.get("chapter", "")
-        if chapter:
-            parts.append(f"Chapter {chapter}")
-
-        section_id    = chunk.get("section_id", "")
-        section_title = chunk.get("section_title", "")
-
-        if section_id and section_title:
-            parts.append(f"Section {section_id} -- {section_title}")
-        elif section_id:
-            parts.append(f"Section {section_id}")
-
-        return ", ".join(parts)
-
-    # ── Answer Generation ───────────────────────────────────────────────────
 
     def _generate_answer(
         self,
