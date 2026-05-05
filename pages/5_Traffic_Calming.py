@@ -201,7 +201,6 @@ def tc_date(label, key, help_text=None, override_value=None):
     """
     import datetime as dt
     current = st.session_state.get(key, None)
-
     if current is not None:
         val = st.date_input(label, key=key, help=help_text, format="MM/DD/YYYY")
     else:
@@ -209,7 +208,6 @@ def tc_date(label, key, help_text=None, override_value=None):
             label, value=override_value, key=key,
             help=help_text, format="MM/DD/YYYY",
         )
-
     date_str = val.strftime("%m/%d/%Y") if isinstance(val, dt.date) else ""
     st.session_state[key + "_str"] = date_str
     return val
@@ -228,7 +226,6 @@ def tc_attachments(appendix_letter):
     )
     if not section:
         return
-
     st.markdown(
         f"**" + chr(0x1F4CE) + f" Appendix {appendix_letter} -- {section['title']}** "
         f"*(check attachments included in this packet)*"
@@ -254,11 +251,9 @@ def _tc_filename():
     from datetime import date
     case   = (st.session_state.get("tc_case_num",   "") or "").strip()
     street = (st.session_state.get("tc_street_name", "") or "").strip()
-
     def _clean(s):
         s = re.sub(r'[\\/:*?"<>|]', "", s)
         return re.sub(r"  +", " ", s).strip()
-
     case   = _clean(case)
     street = _clean(street)
     today  = date.today().strftime("%Y%m%d")
@@ -272,9 +267,14 @@ def _tc_filename():
         return f"TC progress-{today}.json"
 
 
-# Widget-only keys that must never be saved or restored
+# Widget-only keys that must never be saved or restored.
+# Includes nav buttons whose keys begin with tc_ but are claimed by st.button
+# widgets -- assigning to them after render raises
+# StreamlitValueAssignmentNotAllowedError.
 _WIDGET_ONLY_KEYS = {
     "tc_load_uploader",
+    "tc_nav_home",
+    "tc_nav_checklist",
     "tc_street_class_sel",
     "tc_app_type_sel",
     "tc_hoa_status_sel",
@@ -295,6 +295,12 @@ def _save_tc_state() -> bytes:
         if not k.startswith("tc_"):
             continue
         if k in _WIDGET_ONLY_KEYS:
+            continue
+        # Skip _str mirror keys (display-only, derived from date widgets)
+        if k.endswith("_str"):
+            continue
+        # Skip dynamically-named file uploader widget keys (tc_load_uploader_N)
+        if k.startswith("tc_load_uploader_"):
             continue
         if isinstance(v, dt.date):
             payload[k] = {"__date__": v.isoformat()}
@@ -342,6 +348,9 @@ def main():
         for _k, _v in _payload.items():
             if not _k.startswith("tc_") or _k in _SKIP:
                 continue
+            # Never restore _str mirror keys or dynamic uploader widget keys
+            if _k.endswith("_str") or _k.startswith("tc_load_uploader_"):
+                continue
             if isinstance(_v, dict) and "__date__" in _v:
                 try:
                     st.session_state[_k] = _ldt.date.fromisoformat(_v["__date__"])
@@ -377,7 +386,6 @@ def main():
     # ── Save / Load bar ────────────────────────────────────────────────────────
     with st.container():
         save_col, load_col = st.columns([1, 2])
-
         with save_col:
             if st.button(
                 chr(0x1F4BE) + " Save Progress",
@@ -387,7 +395,6 @@ def main():
             ):
                 st.session_state["_tc_save_bytes"] = _save_tc_state()
                 st.session_state["_tc_save_fname"] = _tc_filename()
-
             if st.session_state.get("_tc_save_bytes"):
                 st.download_button(
                     label=chr(0x2B07) + " Download  " + st.session_state.get("_tc_save_fname", "TC_progress.json"),
@@ -397,7 +404,6 @@ def main():
                     use_container_width=True,
                     key="btn_tc_save_dl",
                 )
-
         with load_col:
             _uploader_key = f"tc_load_uploader_{st.session_state.get('_tc_uploader_gen', 0)}"
             uploaded_json = st.file_uploader(
@@ -430,10 +436,8 @@ def main():
                           placeholder="e.g. TC-2026-001")
         with col2:
             tc_date("Application Date", key="tc_app_date")
-
         st.markdown("---")
         st.markdown("**Step 1 -- Street Classification**")
-
         class_opts = ["-- Select --"] + list(STREET_CLASSIFICATIONS.keys())
         prev_class = st.session_state.get("tc_street_class", "")
         chosen_class = st.selectbox(
@@ -444,7 +448,6 @@ def main():
             help="Arterial/Collector show City-designated street lists. Local = free text.",
         )
         street_class = "" if chosen_class == "-- Select --" else chosen_class
-
         if street_class != prev_class:
             st.session_state["tc_street_class"] = street_class
             st.session_state["tc_street_name"]  = ""
@@ -462,7 +465,6 @@ def main():
             st.warning(chr(0x26A0) + " **Arterial Street** -- Standard calming policy does NOT apply. Engineering study required.")
 
         st.markdown("**Step 2 -- Street Name**")
-
         if street_class == "Arterial Street":
             art_opts = ["-- Select Arterial --"] + ARTERIAL_STREETS
             chosen_art = st.selectbox(
@@ -474,7 +476,6 @@ def main():
             new_name = "" if chosen_art == "-- Select Arterial --" else chosen_art
             if new_name != st.session_state.get("tc_street_name", ""):
                 st.session_state["tc_street_name"] = new_name
-
         elif street_class == "Collector Street":
             col_opts = ["-- Select Collector --"] + COLLECTOR_STREETS
             chosen_col = st.selectbox(
@@ -486,7 +487,6 @@ def main():
             new_name = "" if chosen_col == "-- Select Collector --" else chosen_col
             if new_name != st.session_state.get("tc_street_name", ""):
                 st.session_state["tc_street_name"] = new_name
-
         elif street_class == "Local Residential Street":
             st.text_input(
                 "Local Street Name (enter manually)",
@@ -496,7 +496,6 @@ def main():
             current_input = st.session_state.get("tc_street_name_input", "")
             if current_input != st.session_state.get("tc_street_name", ""):
                 st.session_state["tc_street_name"] = current_input
-
         else:
             st.text_input(
                 "Street Name (select classification above first)",
@@ -514,7 +513,6 @@ def main():
             "Approximate Segment Length (ft)  [Part V-a; Part VII]",
             key="tc_seg_length", placeholder="ft",
         )
-
         st.markdown("---")
         st.markdown("**Step 4 - Application Type**")
         type_opts = ["-- Select --"] + list(APPLICATION_TYPES.keys())
@@ -525,7 +523,6 @@ def main():
             key="tc_app_type_sel",
         )
         st.session_state["tc_app_type"] = "" if chosen_type == "-- Select --" else chosen_type
-
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col1:
@@ -548,7 +545,6 @@ def main():
             key="tc_hoa_status_sel",
         )
         st.session_state["tc_hoa_status"] = "" if chosen_hoa == "-- Select --" else chosen_hoa
-
         st.checkbox("HOA governance confirmed  [Part V / VII]", key="tc_c_hoa_gov")
         st.checkbox(
             "HOA written request submitted - or bypass justified (denied / 90-day inaction)  [Part V / VII]",
@@ -578,7 +574,6 @@ def main():
                     st.caption("Must exceed 50% to initiate study")
             except Exception:
                 st.markdown("**Initial Support:** -")
-
         st.checkbox("Initial more-than-50% support petition obtained  [Part V / VII]", key="tc_c_init_pet")
         st.checkbox("One signature and printed name per residence confirmed  [Part V]", key="tc_c_pet_format")
         st.text_area("Description of Perceived Problem / Safety Concern",
@@ -640,7 +635,6 @@ def main():
                 "Cut-Through Traffic % [Part VII - 35% or more = cut-through]",
                 key="tc_data_cutthru",
             )
-
         col1, col2 = st.columns(2)
         with col1:
             school_opts = [
@@ -664,7 +658,6 @@ def main():
                 key="tc_data_sidewalk_status_sel",
             )
             st.session_state["tc_data_sidewalk_status"] = "" if chosen_swlk == "-- Select --" else chosen_swlk
-
         st.checkbox("Speed study completed (24-hr weekday minimum for collectors)  [Part V-a]", key="tc_c_data_speed")
         st.checkbox("Traffic count / ADT collected  [Part V-a / VII]", key="tc_c_data_vol")
         st.checkbox("Crash history reviewed (12 months minimum)  [Parts I-II]", key="tc_c_data_crash")
@@ -693,7 +686,6 @@ def main():
                     st.success("All three roadway criteria met - eligible to proceed with study.")
             except Exception:
                 pass
-
             st.checkbox("24-hr weekday speed data collected  [Part V-a Speed]", key="tc_c_coll_speed_data")
             st.checkbox("Street has no more than two traffic lanes (one each direction)  [Part V-a]", key="tc_c_coll_2lanes")
             st.checkbox("Logical termini for calming treatment identifiable  [Part V-a]", key="tc_c_coll_termini")
@@ -704,7 +696,6 @@ def main():
             st.checkbox("Study notes presence or absence of sidewalks", key="tc_c_coll_study_sidewalk")
             st.checkbox("Study addresses whether street is on a school walking route  [Part V-b-1 / V-b-3]", key="tc_c_coll_study_school")
             st.checkbox("Study outlines applicable Tier 2 strategies for this location  [Part V-b-1]", key="tc_c_coll_study_t2")
-
     elif street_class == "Local Residential Street":
         with st.expander("IV. Speed Hump Eligibility - Local Street (Part VII)", expanded=False):
             st.markdown("**Street Eligibility Criteria - All must be met [Part VII]**")
@@ -726,7 +717,6 @@ def main():
                             st.success(f"ADT {adt_v:.0f} within range")
                 except Exception:
                     pass
-
             st.checkbox("Two-lane street less than 30 ft wide confirmed  [Part VII]", key="tc_c_local_lanewidth")
             st.checkbox("Grade does not exceed 6%  [Part VII]", key="tc_c_local_grade")
             st.checkbox("Posted speed limit is 30 mph or less  [Part VII]", key="tc_c_local_speedlimit")
@@ -794,7 +784,6 @@ def main():
     with st.expander("VI. Tier 2 / Speed Humps - Second Petition (Parts V-b-2; VII)", expanded=False):
         if street_class == "Collector Street":
             st.caption("Speed humps are NOT eligible on designated collector roads.  [Part V-b Tier 2 Note]")
-
         st.markdown("**Tier 2 Strategies Proposed [Part V-b Tier 2]**")
         t2_selected = []
         for strat, cite in TIER2_STRATEGIES:
@@ -809,13 +798,11 @@ def main():
             if st.session_state.get(safe_key):
                 t2_selected.append(strat)
         st.session_state["tc_t2_strategies"] = t2_selected
-
         st.markdown("**Required Review Steps [Part V-b-2]**")
         st.checkbox("City conducted second study validating Tier 1 was ineffective  [Part V-b-2]", key="tc_c_t2_validate")
         st.checkbox("Tier 2 strategy reviewed by City Traffic Engineer before recommendation  [Part V-b-2]", key="tc_c_t2_trafficeng")
         st.checkbox("Separate petition prepared for each proposed improvement  [Part V-b-2]", key="tc_c_t2_sep_petition")
         st.caption("For a series of improvements such as speed tables or circles, one petition per improvement required.")
-
         st.markdown("**Second-Round Petition Process [Part V-b-2; Part VII]**")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -849,7 +836,6 @@ def main():
                 st.caption("Threshold met" if pct2 >= 66.7 else "Need 66.7% (2/3) to proceed")
             except Exception:
                 st.markdown("**Support:** -")
-
         st.checkbox("Petitions mailed by City on petitioner behalf (City mails twice)  [Part V-b-2 / VII]", key="tc_c_pet2_mailed")
         st.checkbox("Vote eligibility confirmed NOT contingent on HOA membership  [Part V-b-2 / VII]", key="tc_c_pet2_hoa")
         st.checkbox("Non-responses confirmed counted as no votes  [Part V-b-2 / VII]", key="tc_c_pet2_nonresp")
@@ -888,7 +874,6 @@ def main():
             "Per Resolution 2026-12 Section 3: petitions with votes within 12 months before "
             "adoption (02/09/2026) use a 12-month moratorium only."
         )
-
         if street_class == "Local Residential Street":
             st.markdown("**Cost-Share Agreement - Local Streets [Part VII]**")
             st.checkbox("Petition signed by 2/3 or more of households agreeing to pay 60% of direct costs  [Part VII]", key="tc_c_costshare_agree")
@@ -912,7 +897,6 @@ def main():
             st.session_state["tc_total_score"] = total_score
             st.metric("Total Priority Score", f"{total_score} / 100")
             st.divider()
-
         st.markdown("**Cost Estimate**")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -939,7 +923,6 @@ def main():
                 st.caption("Petition expires if 60% payment not received within 6 months of Board approval.")
             elif street_class == "Collector Street":
                 st.markdown("**Funding:** 100% City-funded (subject to normal budget process)")
-
         st.checkbox(
             "Resident 60% payment received prior to installation "
             "(local streets - must be within 6 months of Board approval)  [Part VII]",
@@ -980,7 +963,6 @@ def main():
     # =========================================================================
     st.divider()
     col1, col2, col3 = st.columns([3, 3, 1])
-
     with col1:
         if st.button(chr(0x1F4C4) + " Generate Word Document",
                      type="primary", use_container_width=True, key="btn_tc_export"):
@@ -1015,14 +997,12 @@ def main():
             except Exception:
                 st.session_state.pop("_tc_doc_bytes", None)
                 st.session_state["_tc_doc_error"] = _tb.format_exc()
-
         if st.session_state.get("_tc_doc_error"):
             st.error("Report generation failed -- details below:")
             st.code(st.session_state["_tc_doc_error"])
             if st.button("Dismiss error", key="btn_tc_err_dismiss"):
                 st.session_state.pop("_tc_doc_error", None)
                 st.rerun()
-
         if st.session_state.get("_tc_doc_bytes"):
             st.download_button(
                 label=chr(0x2B07) + " Download Checklist + Action Items",
@@ -1032,7 +1012,6 @@ def main():
                 use_container_width=True,
                 key="btn_tc_download",
             )
-
     with col2:
         if st.button(chr(0x1F4CE) + " Generate Appendix Document",
                      use_container_width=True, key="btn_tc_appendix"):
@@ -1067,14 +1046,12 @@ def main():
             except Exception:
                 st.session_state.pop("_tc_app_bytes", None)
                 st.session_state["_tc_app_error"] = _tb.format_exc()
-
         if st.session_state.get("_tc_app_error"):
             st.error("Appendix generation failed -- details below:")
             st.code(st.session_state["_tc_app_error"])
             if st.button("Dismiss error", key="btn_tc_app_err_dismiss"):
                 st.session_state.pop("_tc_app_error", None)
                 st.rerun()
-
         if st.session_state.get("_tc_app_bytes"):
             st.download_button(
                 label=chr(0x2B07) + " Download Appendix Cover Pages",
@@ -1084,7 +1061,6 @@ def main():
                 use_container_width=True,
                 key="btn_tc_app_download",
             )
-
     with col3:
         if st.button("Clear TC Form", use_container_width=True, key="btn_tc_clear"):
             keys_to_clear = [
